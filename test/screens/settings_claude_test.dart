@@ -4,9 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lila/screens/settings_screen.dart';
 import 'package:lila/services/file_service.dart';
-import 'package:lila/services/claude_service.dart';
+import 'package:lila/services/ai_integration_service.dart';
+import 'package:lila/services/ai_provider.dart';
+import 'package:lila/services/ai_usage_service.dart';
 import 'package:lila/services/claude_api_client.dart';
-import 'package:lila/services/claude_usage_service.dart';
 import 'dart:io';
 
 void main() {
@@ -73,17 +74,17 @@ void main() {
     );
 
     FileService.resetInstance();
-    ClaudeService.resetInstance();
+    AiIntegrationService.resetInstance();
     ClaudeApiClient.resetInstance();
-    ClaudeUsageService.resetInstance();
+    AiUsageService.resetAll();
     SharedPreferences.setMockInitialValues({});
   });
 
   tearDown(() {
     FileService.resetInstance();
-    ClaudeService.resetInstance();
+    AiIntegrationService.resetInstance();
     ClaudeApiClient.resetInstance();
-    ClaudeUsageService.resetInstance();
+    AiUsageService.resetAll();
     tempDir.deleteSync(recursive: true);
   });
 
@@ -96,8 +97,8 @@ void main() {
   Future<void> pumpSettingsScreen(WidgetTester tester) async {
     await tester.runAsync(() async {
       await FileService.getInstance();
-      await ClaudeService.getInstance();
-      await ClaudeUsageService.getInstance();
+      await AiIntegrationService.getInstance();
+      await AiUsageService.getInstance(AiProvider.claude);
     });
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
@@ -110,10 +111,17 @@ void main() {
       expect(find.text('AI & Integrations'), findsOneWidget);
     });
 
+    testWidgets('shows provider selector defaulting to Claude', (tester) async {
+      await pumpSettingsScreen(tester);
+
+      expect(find.text('Provider'), findsOneWidget);
+      expect(find.text('Claude'), findsOneWidget);
+    });
+
     testWidgets('shows Claude integration toggle', (tester) async {
       await pumpSettingsScreen(tester);
 
-      expect(find.text('Claude integration'), findsOneWidget);
+      expect(find.text('AI integration'), findsOneWidget);
       expect(find.byType(Switch), findsOneWidget);
     });
 
@@ -176,7 +184,7 @@ void main() {
   group('with saved API key', () {
     setUp(() {
       // Pre-populate secure storage with a valid key
-      mockSecureStorage['lila_claude_api_key'] =
+      mockSecureStorage['lila_ai_api_key_claude'] =
           'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCD';
     });
 
@@ -260,7 +268,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Key should be removed from storage
-      expect(mockSecureStorage['lila_claude_api_key'], isNull);
+      expect(mockSecureStorage['lila_ai_api_key_claude'], isNull);
 
       // Should show prompt to enter key again
       expect(find.text('Enter an API key below to enable.'), findsOneWidget);
@@ -276,14 +284,14 @@ void main() {
       await tester.pumpAndSettle();
 
       // Key should still exist
-      expect(mockSecureStorage['lila_claude_api_key'], isNotNull);
+      expect(mockSecureStorage['lila_ai_api_key_claude'], isNotNull);
       expect(find.textContaining('sk-ant-...'), findsOneWidget);
     });
   });
 
   group('model selector', () {
     setUp(() {
-      mockSecureStorage['lila_claude_api_key'] =
+      mockSecureStorage['lila_ai_api_key_claude'] =
           'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCD';
     });
 
@@ -308,14 +316,20 @@ void main() {
 
   group('daily limit dialog', () {
     setUp(() {
-      mockSecureStorage['lila_claude_api_key'] =
+      mockSecureStorage['lila_ai_api_key_claude'] =
           'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCD';
     });
 
     testWidgets('tapping daily limit opens dialog', (tester) async {
       await pumpSettingsScreen(tester);
 
-      await tester.tap(find.text('No limit'));
+      await tester.dragUntilVisible(
+        find.text('No limit'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('No limit'), warnIfMissed: false);
       await tester.pumpAndSettle();
 
       expect(find.text('Daily token limit'), findsOneWidget);
@@ -326,7 +340,7 @@ void main() {
 
   group('toggle behavior', () {
     setUp(() {
-      mockSecureStorage['lila_claude_api_key'] =
+      mockSecureStorage['lila_ai_api_key_claude'] =
           'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCD';
     });
 

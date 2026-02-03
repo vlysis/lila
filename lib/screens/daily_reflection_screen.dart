@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/log_entry.dart';
 import '../services/file_service.dart';
-import '../services/claude_service.dart';
+import '../services/ai_integration_service.dart';
+import '../widgets/armed_swipe_to_delete.dart';
 import '../widgets/day_discussion_sheet.dart';
 
 class DailyReflectionScreen extends StatefulWidget {
@@ -19,7 +20,7 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
   List<LogEntry> _entries = [];
   String _savedReflectionText = '';
   bool _loading = true;
-  bool _claudeEnabled = false;
+  bool _aiEnabled = false;
 
   final _reflectionController = TextEditingController();
   Timer? _saveTimer;
@@ -62,13 +63,13 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
     final fs = await FileService.getInstance();
     final entries = await fs.readDailyEntries(widget.date);
     final reflection = await fs.readDailyReflection(widget.date);
-    final claudeService = await ClaudeService.getInstance();
+    final integrationService = await AiIntegrationService.getInstance();
 
     if (mounted) {
       setState(() {
         _entries = entries;
         _savedReflectionText = reflection;
-        _claudeEnabled = claudeService.isEnabled;
+        _aiEnabled = integrationService.isEnabled;
         if (_loading) {
           _reflectionController.text = reflection;
         }
@@ -110,6 +111,21 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
     }
   }
 
+  Future<void> _deleteEntry(LogEntry entry) async {
+    final fs = await FileService.getInstance();
+    final removed = await fs.deleteEntry(entry);
+    if (removed && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Moment deleted'),
+          backgroundColor: const Color(0xFF2A2A2A),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _load();
+    }
+  }
+
   void _openDiscussion() {
     showModalBottomSheet(
       context: context,
@@ -135,45 +151,6 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
         modeCounts.keys.map((m) => m.label.toLowerCase()).join(', ');
     final count = _entries.length;
     return '$count moment${count == 1 ? '' : 's'} \u2014 $modeNames';
-  }
-
-  String? _generateWhisper() {
-    if (_entries.isEmpty) return null;
-
-    final modeCounts = <Mode, int>{};
-    final orientationCounts = <LogOrientation, int>{};
-    for (final e in _entries) {
-      modeCounts[e.mode] = (modeCounts[e.mode] ?? 0) + 1;
-      orientationCounts[e.orientation] =
-          (orientationCounts[e.orientation] ?? 0) + 1;
-    }
-
-    if (modeCounts[Mode.nourishment] == 1 && _entries.length > 1) {
-      return 'First Nourishment logged today.';
-    }
-
-    final otherCount = orientationCounts[LogOrientation.other] ?? 0;
-    if (otherCount > _entries.length / 2 && _entries.length >= 3) {
-      return 'Mostly Other-directed so far.';
-    }
-
-    final selfCount = orientationCounts[LogOrientation.self_] ?? 0;
-    if (selfCount > _entries.length / 2 && _entries.length >= 3) {
-      return 'Mostly Self-directed today.';
-    }
-
-    if (modeCounts[Mode.drift] != null && modeCounts[Mode.drift]! >= 1) {
-      final lastEntry = _entries.last;
-      if (lastEntry.mode == Mode.drift) {
-        return 'Drift noticed.';
-      }
-    }
-
-    if (_entries.length == 1) {
-      return 'Day started.';
-    }
-
-    return '${_entries.length} moments logged today.';
   }
 
   @override
@@ -221,17 +198,6 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
                         fontSize: 14,
                       ),
                     ),
-                    if (_generateWhisper() != null) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        _generateWhisper()!,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.5),
-                          fontSize: 14,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ],
                     if (_entries.isNotEmpty) ...[
                       const SizedBox(height: 24),
                       Text(
@@ -304,7 +270,7 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
                         ),
                       ),
                     ),
-                    if (_claudeEnabled) ...[
+                    if (_aiEnabled) ...[
                       const SizedBox(height: 24),
                       Center(
                         child: OutlinedButton.icon(
@@ -348,7 +314,12 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
     final isReflection = entry.label == 'Daily reflection';
 
     if (isReflection) {
-      return _buildReflectionCard(time);
+      return ArmedSwipeToDelete(
+        dismissKey: ValueKey(
+            '${entry.timestamp.toIso8601String()}-${entry.label ?? ''}-${entry.mode.name}-${entry.orientation.name}'),
+        onDelete: () => _deleteEntry(entry),
+        child: _buildReflectionCard(time),
+      );
     }
 
     final modeColor = _modeColors[entry.mode] ?? Colors.grey;
@@ -356,64 +327,69 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
     final orientationColor =
         _orientationColors[entry.orientation] ?? Colors.grey;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: modeColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Center(
-                child: Image.asset(
-                  modeAsset,
-                  width: 20,
-                  height: 20,
-                  color: modeColor,
+    return ArmedSwipeToDelete(
+      dismissKey: ValueKey(
+          '${entry.timestamp.toIso8601String()}-${entry.label ?? ''}-${entry.mode.name}-${entry.orientation.name}'),
+      onDelete: () => _deleteEntry(entry),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.04),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: modeColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Center(
+                  child: Image.asset(
+                    modeAsset,
+                    width: 20,
+                    height: 20,
+                    color: modeColor,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    entry.label ?? entry.mode.label,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 15,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.label ?? entry.mode.label,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.8),
+                        fontSize: 15,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 5),
-                  Row(
-                    children: [
-                      _buildPill(entry.mode.label, modeColor),
-                      const SizedBox(width: 6),
-                      _buildPill(entry.orientation.label, orientationColor),
-                    ],
-                  ),
-                ],
+                    const SizedBox(height: 5),
+                    Row(
+                      children: [
+                        _buildPill(entry.mode.label, modeColor),
+                        const SizedBox(width: 6),
+                        _buildPill(entry.orientation.label, orientationColor),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Text(
-              time,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.25),
-                fontSize: 12,
-                fontFeatures: const [FontFeature.tabularFigures()],
+              Text(
+                time,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.25),
+                  fontSize: 12,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

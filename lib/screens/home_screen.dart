@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/log_entry.dart';
 import '../services/file_service.dart';
+import '../widgets/armed_swipe_to_delete.dart';
 import '../widgets/log_bottom_sheet.dart';
-import '../widgets/whisper.dart';
 import 'daily_detail_screen.dart';
 import 'daily_reflection_screen.dart';
 import 'settings_screen.dart';
@@ -19,6 +19,26 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<LogEntry> _todayEntries = [];
   String _dailyReflection = '';
+
+  static const _modeColors = {
+    Mode.nourishment: Color(0xFF6B8F71),
+    Mode.growth: Color(0xFF7B9EA8),
+    Mode.maintenance: Color(0xFFA8976B),
+    Mode.drift: Color(0xFF8B7B8B),
+  };
+
+  static const _modeAssets = {
+    Mode.nourishment: 'assets/icons/nourishment.png',
+    Mode.growth: 'assets/icons/growth.png',
+    Mode.maintenance: 'assets/icons/maintenence.png',
+    Mode.drift: 'assets/icons/drift.png',
+  };
+
+  static const _orientationColors = {
+    LogOrientation.self_: Color(0xFF9B8EC4),
+    LogOrientation.mutual: Color(0xFF6BA8A0),
+    LogOrientation.other: Color(0xFFA87B6B),
+  };
 
   @override
   void initState() {
@@ -71,16 +91,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 ).then((_) => _loadEntries());
               },
               child: Container(
-                width: 36,
-                height: 36,
+                width: 54,
+                height: 54,
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(27),
                 ),
                 child: Icon(
                   Icons.edit_note_outlined,
                   color: Colors.white.withValues(alpha: 0.4),
-                  size: 20,
+                  size: 30,
                 ),
               ),
             ),
@@ -102,16 +122,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 ).then((_) => _loadEntries());
               },
               child: Container(
-                width: 36,
-                height: 36,
+                width: 54,
+                height: 54,
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(27),
                 ),
                 child: Icon(
                   Icons.calendar_view_week_outlined,
                   color: Colors.white.withValues(alpha: 0.4),
-                  size: 20,
+                  size: 30,
                 ),
               ),
             ),
@@ -124,16 +144,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 MaterialPageRoute(builder: (_) => const SettingsScreen()),
               ).then((_) => _loadEntries()),
               child: Container(
-                width: 36,
-                height: 36,
+                width: 54,
+                height: 54,
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(27),
                 ),
                 child: Icon(
                   Icons.settings_outlined,
                   color: Colors.white.withValues(alpha: 0.4),
-                  size: 20,
+                  size: 30,
                 ),
               ),
             ),
@@ -172,9 +192,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 32),
-              WhisperWidget(todayEntries: _todayEntries),
               if (_todayEntries.isNotEmpty) ...[
-                const SizedBox(height: 24),
                 _buildTodaySummary(),
               ],
               if (_todayEntries.isNotEmpty &&
@@ -247,33 +265,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        ..._todayEntries.reversed.take(5).map((entry) {
-          final time =
-              '${entry.timestamp.hour.toString().padLeft(2, '0')}:${entry.timestamp.minute.toString().padLeft(2, '0')}';
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Row(
-              children: [
-                Text(
-                  time,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.25),
-                    fontSize: 13,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Text(
-                  entry.label ?? entry.mode.label,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.7),
-                    fontSize: 15,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
+        ..._todayEntries.reversed.take(5).map(_buildSummaryEntry),
         if (_todayEntries.length > 5)
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -286,6 +278,114 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildSummaryEntry(LogEntry entry) {
+    final time =
+        '${entry.timestamp.hour.toString().padLeft(2, '0')}:${entry.timestamp.minute.toString().padLeft(2, '0')}';
+    final modeColor = _modeColors[entry.mode] ?? Colors.grey;
+    final modeAsset = _modeAssets[entry.mode]!;
+    final orientationColor =
+        _orientationColors[entry.orientation] ?? Colors.grey;
+
+    return ArmedSwipeToDelete(
+      dismissKey: ValueKey(
+          '${entry.timestamp.toIso8601String()}-${entry.label ?? ''}-${entry.mode.name}-${entry.orientation.name}'),
+      onDelete: () async {
+        final fs = await FileService.getInstance();
+        final removed = await fs.deleteEntry(entry);
+        if (removed && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Moment deleted'),
+              backgroundColor: const Color(0xFF2A2A2A),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          await _loadEntries();
+        }
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.04),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: modeColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Center(
+                  child: Image.asset(
+                    modeAsset,
+                    width: 18,
+                    height: 18,
+                    color: modeColor,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.label ?? entry.mode.label,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.8),
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        _buildPill(entry.mode.label, modeColor),
+                        const SizedBox(width: 6),
+                        _buildPill(entry.orientation.label, orientationColor),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                time,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.25),
+                  fontSize: 12,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPill(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
     );
   }
 }

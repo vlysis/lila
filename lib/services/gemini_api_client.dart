@@ -7,47 +7,41 @@ import 'ai_integration_service.dart';
 import 'ai_provider.dart';
 import 'ai_usage_service.dart';
 
-/// Client for communicating with the Claude API.
-class ClaudeApiClient {
-  static const _baseUrl = 'https://api.anthropic.com';
-  static const _apiVersion = '2023-06-01';
-  static const _defaultModel = 'claude-haiku-4-5-20251001';
+/// Client for communicating with the Gemini API.
+class GeminiApiClient {
+  static const _baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+  static const _defaultModel = 'gemini-2.5-flash';
 
-  // Timeouts
   static const _connectTimeout = Duration(seconds: 10);
   static const _receiveTimeout = Duration(seconds: 60);
 
-  // Retry configuration
   static const _maxRetries = 3;
   static const _retryableStatusCodes = {429, 500, 502, 503, 504};
-  // Non-retryable: 400, 401, 403, 422 - handled by _mapDioError
 
-  static ClaudeApiClient? _instance;
+  static GeminiApiClient? _instance;
   late final Dio _dio;
   final AiIntegrationService _integrationService;
 
-  ClaudeApiClient._(this._integrationService) {
+  GeminiApiClient._(this._integrationService) {
     _dio = Dio(BaseOptions(
       baseUrl: _baseUrl,
       connectTimeout: _connectTimeout,
       receiveTimeout: _receiveTimeout,
       headers: {
-        'anthropic-version': _apiVersion,
         'content-type': 'application/json',
       },
     ));
 
-    // Add interceptors
     _dio.interceptors.add(_LogRedactionInterceptor());
     if (kDebugMode) {
       _dio.interceptors.add(_DebugLogInterceptor());
     }
   }
 
-  static Future<ClaudeApiClient> getInstance() async {
+  static Future<GeminiApiClient> getInstance() async {
     if (_instance == null) {
       final integrationService = await AiIntegrationService.getInstance();
-      _instance = ClaudeApiClient._(integrationService);
+      _instance = GeminiApiClient._(integrationService);
     }
     return _instance!;
   }
@@ -55,30 +49,29 @@ class ClaudeApiClient {
   @visibleForTesting
   static void resetInstance() => _instance = null;
 
-  /// Validates an API key by making a minimal request.
-  /// Returns null if valid, or an error if invalid.
   Future<AiApiError?> validateApiKey(String apiKey) async {
     final result = await _makeRequest<Map<String, dynamic>>(
-      '/v1/messages',
+      _modelPath(_defaultModel),
       {
-        'model': _defaultModel,
-        'max_tokens': 1,
-        'messages': [
-          {'role': 'user', 'content': 'ping'}
+        'contents': [
+          {
+            'role': 'user',
+            'parts': [
+              {'text': 'ping'}
+            ]
+          }
         ],
+        'generationConfig': {
+          'maxOutputTokens': 1,
+        },
       },
       apiKeyOverride: apiKey,
-      skipRetry: true, // Don't retry validation requests
+      skipRetry: true,
     );
 
     return result.error;
   }
 
-  /// Sends a message to Claude and returns the response.
-  ///
-  /// If [messageHistory] is provided, it should be a list of message maps
-  /// with 'role' ('user' or 'assistant') and 'content' keys. The [message]
-  /// parameter will be appended as the final user message.
   Future<AiApiResult<String>> sendMessage({
     required String message,
     String? model,
@@ -86,50 +79,53 @@ class ClaudeApiClient {
     String? systemPrompt,
     List<Map<String, String>>? messageHistory,
   }) async {
-    // Check if integration is enabled
-    if (!_integrationService.isEnabledFor(AiProvider.claude)) {
+    if (!_integrationService.isEnabledFor(AiProvider.gemini)) {
       return AiApiResult(error: AiApiError.integrationPaused);
     }
 
-    // Check daily cap
-    final usageService = await AiUsageService.getInstance(AiProvider.claude);
+    final usageService = await AiUsageService.getInstance(AiProvider.gemini);
     if (!usageService.canMakeRequest) {
       return AiApiResult(error: AiApiError.dailyCapReached);
     }
 
-    final apiKey = await _integrationService.getApiKey(AiProvider.claude);
+    final apiKey = await _integrationService.getApiKey(AiProvider.gemini);
     if (apiKey == null) {
       return AiApiResult(error: AiApiError.keyInvalid);
     }
 
     final selectedModel =
-        model ?? _integrationService.selectedModel(AiProvider.claude);
+        model ?? _integrationService.selectedModel(AiProvider.gemini);
 
-    // Build messages array from history plus new message
-    final messages = <Map<String, String>>[];
+    final contents = <Map<String, dynamic>>[];
     if (messageHistory != null) {
-      messages.addAll(messageHistory);
+      for (final msg in messageHistory) {
+        contents.add(_toGeminiContent(msg['role'] ?? 'user', msg['content'] ?? ''));
+      }
     }
-    messages.add({'role': 'user', 'content': message});
+    contents.add(_toGeminiContent('user', message));
 
     final body = <String, dynamic>{
-      'model': selectedModel,
-      'max_tokens': maxTokens,
-      'messages': messages,
+      'contents': contents,
+      'generationConfig': {
+        'maxOutputTokens': maxTokens,
+      },
     };
 
-    if (systemPrompt != null) {
-      body['system'] = systemPrompt;
+    if (systemPrompt != null && systemPrompt.isNotEmpty) {
+      body['systemInstruction'] = {
+        'parts': [
+          {'text': systemPrompt}
+        ]
+      };
     }
 
     final result = await _makeRequest<Map<String, dynamic>>(
-      '/v1/messages',
+      _modelPath(selectedModel),
       body,
       apiKeyOverride: apiKey,
     );
 
     if (result.isError) {
-      // Auto-pause on 401 during normal usage
       if (result.error == AiApiError.keyInvalid) {
         await _integrationService.setEnabled(false);
       }
@@ -139,7 +135,6 @@ class ClaudeApiClient {
       );
     }
 
-    // Record token usage
     if (result.inputTokens != null && result.outputTokens != null) {
       await usageService.recordUsage(
         inputTokens: result.inputTokens!,
@@ -147,23 +142,40 @@ class ClaudeApiClient {
       );
     }
 
-    // Extract text from response
-    final content = result.data?['content'] as List<dynamic>?;
-    final textBlock = content?.firstWhere(
-      (block) => block['type'] == 'text',
-      orElse: () => null,
-    );
-    final text = textBlock?['text'] as String? ?? '';
+    final candidates = result.data?['candidates'] as List<dynamic>?;
+    final firstCandidate = candidates != null && candidates.isNotEmpty
+        ? candidates.first as Map<String, dynamic>
+        : null;
+    final content = firstCandidate?['content'] as Map<String, dynamic>?;
+    final parts = content?['parts'] as List<dynamic>?;
+    final textPart = parts != null && parts.isNotEmpty
+        ? parts.firstWhere(
+            (part) => part is Map<String, dynamic> && part['text'] != null,
+            orElse: () => null,
+          )
+        : null;
+    final text = textPart is Map<String, dynamic> ? textPart['text'] as String? : null;
 
     return AiApiResult(
-      data: text,
+      data: text ?? '',
       statusCode: result.statusCode,
       inputTokens: result.inputTokens,
       outputTokens: result.outputTokens,
     );
   }
 
-  /// Makes an HTTP request with retry logic.
+  Map<String, dynamic> _toGeminiContent(String role, String content) {
+    final geminiRole = role == 'assistant' ? 'model' : 'user';
+    return {
+      'role': geminiRole,
+      'parts': [
+        {'text': content}
+      ],
+    };
+  }
+
+  String _modelPath(String model) => '/models/$model:generateContent';
+
   Future<AiApiResult<T>> _makeRequest<T>(
     String path,
     Map<String, dynamic> body, {
@@ -171,7 +183,7 @@ class ClaudeApiClient {
     bool skipRetry = false,
   }) async {
     final apiKey =
-        apiKeyOverride ?? await _integrationService.getApiKey(AiProvider.claude);
+        apiKeyOverride ?? await _integrationService.getApiKey(AiProvider.gemini);
     if (apiKey == null) {
       return AiApiResult(error: AiApiError.keyInvalid);
     }
@@ -185,20 +197,29 @@ class ClaudeApiClient {
           data: body,
           options: Options(
             headers: {
-              'x-api-key': apiKey,
+              'x-goog-api-key': apiKey,
               'User-Agent': 'Lila/1.0.0 (Flutter)',
             },
           ),
         );
 
-        // Extract token usage from response
         int? inputTokens;
         int? outputTokens;
         if (response.data is Map<String, dynamic>) {
-          final usage = (response.data as Map<String, dynamic>)['usage'];
+          final usage = (response.data as Map<String, dynamic>)['usageMetadata'];
           if (usage is Map<String, dynamic>) {
-            inputTokens = usage['input_tokens'] as int?;
-            outputTokens = usage['output_tokens'] as int?;
+            inputTokens = usage['promptTokenCount'] as int?;
+            outputTokens = usage['candidatesTokenCount'] as int?;
+            final totalTokens = usage['totalTokenCount'] as int?;
+            if (inputTokens == null && totalTokens != null) {
+              inputTokens = totalTokens;
+            }
+            if (outputTokens == null &&
+                totalTokens != null &&
+                inputTokens != null) {
+              outputTokens =
+                  (totalTokens - inputTokens!).clamp(0, totalTokens).toInt();
+            }
           }
         }
 
@@ -212,7 +233,6 @@ class ClaudeApiClient {
         final error = _mapDioError(e);
         final statusCode = e.response?.statusCode;
 
-        // Check if we should retry
         if (!skipRetry &&
             attempt < _maxRetries &&
             statusCode != null &&
@@ -229,13 +249,13 @@ class ClaudeApiClient {
     }
   }
 
-  /// Maps DioException to AiApiError.
   AiApiError _mapDioError(DioException e) {
     final statusCode = e.response?.statusCode;
 
     if (statusCode != null) {
       switch (statusCode) {
         case 401:
+        case 403:
           return AiApiError.keyInvalid;
         case 429:
           return AiApiError.rateLimited;
@@ -261,20 +281,16 @@ class ClaudeApiClient {
     }
   }
 
-  /// Calculates exponential back-off delay with jitter.
   Future<void> _delayWithJitter(int attempt) async {
     final baseDelay = Duration(milliseconds: 1000 * pow(2, attempt - 1).toInt());
-    final jitter = Duration(
-      milliseconds: Random().nextInt(500),
-    );
+    final jitter = Duration(milliseconds: Random().nextInt(500));
     await Future.delayed(baseDelay + jitter);
   }
 }
 
-/// Interceptor that redacts API keys from logs.
 class _LogRedactionInterceptor extends Interceptor {
   static final _keyPattern =
-      RegExp(r'(sk-ant-api03-[A-Za-z0-9_-]+|AIza[0-9A-Za-z\\-_]+)');
+      RegExp(r'(sk-ant-api03-[A-Za-z0-9_-]+|AIza[0-9A-Za-z\-_]+)');
 
   String _redact(String input) {
     return input.replaceAllMapped(_keyPattern, (match) {
@@ -290,28 +306,10 @@ class _LogRedactionInterceptor extends Interceptor {
   }
 
   @override
-  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    // Redact API key from headers before any logging
-    final headers = Map<String, dynamic>.from(options.headers);
-    if (headers.containsKey('x-api-key')) {
-      final key = headers['x-api-key'] as String?;
-      if (key != null && key.length > 15) {
-        headers['x-api-key'] = 'sk-ant-...${key.substring(key.length - 4)}';
-      } else {
-        headers['x-api-key'] = '[REDACTED]';
-      }
-    }
-    // Note: We don't modify the actual request, just ensure redaction happens in logs
-    handler.next(options);
-  }
-
-  @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    // Redact any keys that might appear in error messages
     if (err.message != null) {
       final redactedMessage = _redact(err.message!);
       if (redactedMessage != err.message) {
-        // Create new error with redacted message if needed
         handler.next(DioException(
           requestOptions: err.requestOptions,
           response: err.response,
@@ -326,31 +324,28 @@ class _LogRedactionInterceptor extends Interceptor {
   }
 }
 
-/// Debug logging interceptor (only in debug mode).
 class _DebugLogInterceptor extends Interceptor {
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    // Log request without sensitive data
     final maskedHeaders = Map<String, dynamic>.from(options.headers);
-    if (maskedHeaders.containsKey('x-api-key')) {
-      final key = maskedHeaders['x-api-key'] as String?;
+    if (maskedHeaders.containsKey('x-goog-api-key')) {
+      final key = maskedHeaders['x-goog-api-key'] as String?;
       if (key != null && key.length > 15) {
-        maskedHeaders['x-api-key'] = 'sk-ant-...${key.substring(key.length - 4)}';
+        maskedHeaders['x-goog-api-key'] = 'AIza...${key.substring(key.length - 4)}';
       } else {
-        maskedHeaders['x-api-key'] = '[REDACTED]';
+        maskedHeaders['x-goog-api-key'] = '[REDACTED]';
       }
     }
-    debugPrint('Claude API Request: ${options.method} ${options.path}');
+    debugPrint('Gemini API Request: ${options.method} ${options.path}');
     debugPrint('Headers: $maskedHeaders');
     handler.next(options);
   }
 
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
-    debugPrint('Claude API Response: ${response.statusCode}');
-    // Extract usage info for logging
+    debugPrint('Gemini API Response: ${response.statusCode}');
     if (response.data is Map<String, dynamic>) {
-      final usage = (response.data as Map<String, dynamic>)['usage'];
+      final usage = (response.data as Map<String, dynamic>)['usageMetadata'];
       if (usage != null) {
         debugPrint('Token usage: $usage');
       }
@@ -360,7 +355,7 @@ class _DebugLogInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    debugPrint('Claude API Error: ${err.type} - ${err.message}');
+    debugPrint('Gemini API Error: ${err.type} - ${err.message}');
     if (err.response != null) {
       debugPrint('Status: ${err.response?.statusCode}');
     }

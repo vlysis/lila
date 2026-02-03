@@ -149,6 +149,68 @@ class FileService {
     return entries;
   }
 
+  Future<bool> deleteEntry(LogEntry entry) async {
+    final path = _dailyFilePath(entry.timestamp);
+    final file = File(path);
+    if (!await file.exists()) return false;
+
+    final content = await file.readAsString();
+    final entriesHeaderIndex = content.indexOf('## Entries');
+    if (entriesHeaderIndex == -1) return false;
+
+    final headerLineEnd = content.indexOf('\n', entriesHeaderIndex);
+    if (headerLineEnd == -1) return false;
+
+    final entriesStart = headerLineEnd + 1;
+    final afterEntries = content.substring(entriesStart);
+    final nextSectionMatch = RegExp(r'\n## ').firstMatch(afterEntries);
+    final entriesEnd = nextSectionMatch != null
+        ? entriesStart + nextSectionMatch.start
+        : content.length;
+
+    final entriesSection = content.substring(entriesStart, entriesEnd);
+    final blocks = entriesSection.split(RegExp(r'\n(?=- \*\*)'));
+    var removed = false;
+    final keptBlocks = <String>[];
+
+    for (final block in blocks) {
+      final parsed = LogEntry.fromMarkdown(block);
+      if (!removed && parsed != null && _matchesEntry(entry, parsed)) {
+        removed = true;
+        continue;
+      }
+      keptBlocks.add(block);
+    }
+
+    if (removed) {
+      final updated =
+          content.substring(0, entriesStart) +
+          keptBlocks.join('\n') +
+          content.substring(entriesEnd);
+      await file.writeAsString(updated);
+    }
+    return removed;
+  }
+
+  bool _matchesEntry(LogEntry target, LogEntry parsed) {
+    final targetLabel =
+        target.label?.trim().isNotEmpty == true ? target.label! : target.mode.label;
+    final parsedLabel =
+        parsed.label?.trim().isNotEmpty == true ? parsed.label! : parsed.mode.label;
+
+    if (targetLabel != parsedLabel) return false;
+    if (target.mode != parsed.mode) return false;
+    if (target.orientation != parsed.orientation) return false;
+    if (target.timestamp.hour != parsed.timestamp.hour ||
+        target.timestamp.minute != parsed.timestamp.minute) {
+      return false;
+    }
+    if (target.duration != null && target.duration != parsed.duration) {
+      return false;
+    }
+    return true;
+  }
+
   Future<String> readDailyRaw(DateTime date) async {
     final path = _dailyFilePath(date);
     final file = File(path);

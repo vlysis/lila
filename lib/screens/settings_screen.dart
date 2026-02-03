@@ -2,9 +2,12 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../services/ai_api_types.dart';
+import '../services/ai_integration_service.dart';
+import '../services/ai_provider.dart';
+import '../services/ai_usage_service.dart';
 import '../services/claude_api_client.dart';
-import '../services/claude_service.dart';
-import '../services/claude_usage_service.dart';
+import '../services/gemini_api_client.dart';
 import '../services/file_service.dart';
 import '../services/synthetic_data_service.dart';
 
@@ -18,13 +21,14 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   String _vaultPath = '';
 
-  // Claude integration state
-  ClaudeService? _claudeService;
-  ClaudeUsageService? _usageService;
-  bool _claudeEnabled = false;
+  // AI integration state
+  AiIntegrationService? _integrationService;
+  AiUsageService? _usageService;
+  AiProvider _activeProvider = AiProvider.claude;
+  bool _aiEnabled = false;
   bool _hasApiKey = false;
   String? _maskedKey;
-  String _selectedModel = 'claude-haiku-4-5-20251001';
+  String _selectedModel = AiProvider.claude.defaultModel;
   String _usageSummary = '';
   int _dailyCap = 0;
   final _apiKeyController = TextEditingController();
@@ -32,18 +36,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _keyError;
   bool _isSavingKey = false;
 
-  // Available models
-  static const _availableModels = [
-    ('claude-haiku-4-5-20251001', 'Haiku (fastest, cheapest)'),
-    ('claude-sonnet-4-20250514', 'Sonnet (balanced)'),
-    ('claude-opus-4-20250514', 'Opus (most capable)'),
-  ];
+  // Models are provided by the active provider.
 
   @override
   void initState() {
     super.initState();
     _loadPath();
-    _loadClaudeState();
+    _loadAiState();
   }
 
   @override
@@ -57,21 +56,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) setState(() => _vaultPath = fs.rootDir);
   }
 
-  Future<void> _loadClaudeState() async {
-    final claude = await ClaudeService.getInstance();
-    final usage = await ClaudeUsageService.getInstance();
+  Future<void> _loadAiState() async {
+    final integration = await AiIntegrationService.getInstance();
+    final provider = integration.activeProvider;
+    final usage = await AiUsageService.getInstance(provider);
+    final selectedModel = _normalizeModel(
+      provider,
+      integration.selectedModel(provider),
+    );
     if (mounted) {
       setState(() {
-        _claudeService = claude;
+        _integrationService = integration;
         _usageService = usage;
-        _claudeEnabled = claude.isEnabled;
-        _hasApiKey = claude.hasApiKey;
-        _maskedKey = claude.maskedKey;
-        _selectedModel = claude.selectedModel;
+        _activeProvider = provider;
+        _aiEnabled = integration.isEnabled;
+        _hasApiKey = integration.hasApiKey(provider);
+        _maskedKey = integration.maskedKey(provider);
+        _selectedModel = selectedModel;
         _usageSummary = usage.usageSummary;
         _dailyCap = usage.dailyCap;
       });
     }
+  }
+
+  Future<void> _setActiveProvider(AiProvider provider) async {
+    if (_integrationService == null) return;
+    await _integrationService!.setActiveProvider(provider);
+    final usage = await AiUsageService.getInstance(provider);
+    final selectedModel = _normalizeModel(
+      provider,
+      _integrationService!.selectedModel(provider),
+    );
+    if (!mounted) return;
+    setState(() {
+      _activeProvider = provider;
+      _usageService = usage;
+      _aiEnabled = _integrationService!.isEnabled;
+      _hasApiKey = _integrationService!.hasApiKey(provider);
+      _maskedKey = _integrationService!.maskedKey(provider);
+      _selectedModel = selectedModel;
+      _usageSummary = usage.usageSummary;
+      _dailyCap = usage.dailyCap;
+      _keyError = null;
+      _isEnteringKey = false;
+      _apiKeyController.clear();
+    });
+  }
+
+  String _normalizeModel(AiProvider provider, String model) {
+    final available = provider.availableModels.map((entry) => entry.$1);
+    return available.contains(model) ? model : provider.defaultModel;
   }
 
   void _changeVaultPath() {
@@ -211,11 +245,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
+  Future<AiApiError?> _validateApiKey(String key) async {
+    switch (_activeProvider) {
+      case AiProvider.claude:
+        final client = await ClaudeApiClient.getInstance();
+        return client.validateApiKey(key);
+      case AiProvider.gemini:
+        final client = await GeminiApiClient.getInstance();
+        return client.validateApiKey(key);
+    }
+  }
+
   Future<void> _saveApiKey() async {
-    if (_claudeService == null) return;
+    if (_integrationService == null) return;
 
     final key = _apiKeyController.text.trim();
-    final formatError = ClaudeService.validateKeyFormat(key);
+    final formatError =
+        AiIntegrationService.validateKeyFormat(_activeProvider, key);
     if (formatError != null) {
       setState(() => _keyError = formatError);
       return;
@@ -227,8 +273,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     // Validate key with API before saving
-    final apiClient = await ClaudeApiClient.getInstance();
-    final validationError = await apiClient.validateApiKey(key);
+    final validationError = await _validateApiKey(key);
 
     if (!mounted) return;
 
@@ -241,7 +286,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     // Key is valid, save it
-    final saveError = await _claudeService!.saveApiKey(key);
+    final saveError =
+        await _integrationService!.saveApiKey(_activeProvider, key);
 
     if (!mounted) return;
 
@@ -253,7 +299,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } else {
       setState(() {
         _hasApiKey = true;
-        _maskedKey = _claudeService!.maskedKey;
+        _maskedKey = _integrationService!.maskedKey(_activeProvider);
         _isEnteringKey = false;
         _isSavingKey = false;
         _apiKeyController.clear();
@@ -267,11 +313,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _toggleClaudeEnabled(bool enabled) async {
-    if (_claudeService == null) return;
-    await _claudeService!.setEnabled(enabled);
+  Future<void> _toggleAiEnabled(bool enabled) async {
+    if (_integrationService == null) return;
+    await _integrationService!.setEnabled(enabled);
     if (mounted) {
-      setState(() => _claudeEnabled = enabled);
+      setState(() => _aiEnabled = enabled);
     }
   }
 
@@ -285,7 +331,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           style: TextStyle(color: Colors.white.withValues(alpha: 0.9)),
         ),
         content: Text(
-          'This will disable Claude integration and remove your saved key.',
+          'This will disable ${_activeProvider.displayName} integration and remove your saved key.',
           style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
         ),
         actions: [
@@ -299,12 +345,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              await _claudeService?.deleteApiKey();
+              await _integrationService?.deleteApiKey(_activeProvider);
               if (mounted) {
                 setState(() {
                   _hasApiKey = false;
                   _maskedKey = null;
-                  _claudeEnabled = false;
+                  _aiEnabled = false;
                 });
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -327,12 +373,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _onKeyFieldPaste() {
     // Clear clipboard after paste for security
     Future.delayed(const Duration(milliseconds: 100), () {
-      ClaudeService.clearClipboard();
+      AiIntegrationService.clearClipboard();
     });
   }
 
   Future<void> _changeModel(String model) async {
-    await _claudeService?.setModel(model);
+    await _integrationService?.setModel(_activeProvider, model);
     if (mounted) {
       setState(() => _selectedModel = model);
     }
@@ -533,7 +579,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 32),
           _buildSection(
             'AI & Integrations',
-            _buildClaudeSection(),
+            _buildAiSection(),
           ),
           if (kDebugMode) ...[
             const SizedBox(height: 32),
@@ -573,24 +619,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildClaudeSection() {
+  Widget _buildAiSection() {
+    final availableModels = _activeProvider.availableModels;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Provider selector
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Provider',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.6),
+                fontSize: 14,
+              ),
+            ),
+            DropdownButton<AiProvider>(
+              value: _activeProvider,
+              dropdownColor: const Color(0xFF2A2A2A),
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.8),
+                fontSize: 14,
+              ),
+              underline: const SizedBox(),
+              icon: Icon(
+                Icons.arrow_drop_down,
+                color: Colors.white.withValues(alpha: 0.5),
+              ),
+              items: AiProvider.values.map((provider) {
+                return DropdownMenuItem(
+                  value: provider,
+                  child: Text(provider.displayName),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (value != null) _setActiveProvider(value);
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
         // Toggle row
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Claude integration',
+              'AI integration',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.8),
                 fontSize: 14,
               ),
             ),
             Switch(
-              value: _claudeEnabled,
-              onChanged: _hasApiKey ? _toggleClaudeEnabled : null,
+              value: _aiEnabled,
+              onChanged: _hasApiKey ? _toggleAiEnabled : null,
               activeThumbColor: const Color(0xFF6B8AFF),
               activeTrackColor: const Color(0xFF6B8AFF).withValues(alpha: 0.4),
               inactiveThumbColor: Colors.white.withValues(alpha: 0.3),
@@ -677,7 +760,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onFocusChange: (hasFocus) {
               if (!hasFocus && _apiKeyController.text.isNotEmpty) {
                 // Clear clipboard when focus is lost after pasting
-                ClaudeService.clearClipboard();
+                AiIntegrationService.clearClipboard();
               }
             },
             child: TextField(
@@ -691,7 +774,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 fontFamily: 'monospace',
               ),
               decoration: InputDecoration(
-                hintText: 'sk-ant-api03-...',
+                hintText: _activeProvider.keyHint,
                 hintStyle: TextStyle(
                   color: Colors.white.withValues(alpha: 0.3),
                   fontFamily: 'monospace',
@@ -796,7 +879,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Icons.arrow_drop_down,
                   color: Colors.white.withValues(alpha: 0.5),
                 ),
-                items: _availableModels.map((model) {
+                items: availableModels.map((model) {
                   return DropdownMenuItem(
                     value: model.$1,
                     child: Text(model.$2),
@@ -847,7 +930,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     Text(
                       _dailyCap > 0
-                          ? ClaudeUsageService.formatTokens(_dailyCap)
+                          ? AiUsageService.formatTokens(_dailyCap)
                           : 'No limit',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.5),
@@ -869,7 +952,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
         const SizedBox(height: 16),
         Text(
-          'Your API key is stored securely on this device and never sent anywhere except to Anthropic.',
+          'Your API key is stored securely on this device and never sent anywhere except to your selected provider.',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.35),
+            fontSize: 12,
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'API keys are sensitive. Client-side use can expose them, so consider restricting keys in your provider settings.',
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.35),
             fontSize: 12,

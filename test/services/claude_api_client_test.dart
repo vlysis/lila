@@ -1,9 +1,11 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:lila/services/ai_api_types.dart';
+import 'package:lila/services/ai_integration_service.dart';
+import 'package:lila/services/ai_provider.dart';
+import 'package:lila/services/ai_usage_service.dart';
 import 'package:lila/services/claude_api_client.dart';
-import 'package:lila/services/claude_service.dart';
-import 'package:lila/services/claude_usage_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -38,96 +40,96 @@ void main() {
     );
 
     SharedPreferences.setMockInitialValues({});
-    ClaudeService.resetInstance();
+    AiIntegrationService.resetInstance();
     ClaudeApiClient.resetInstance();
   });
 
   tearDown(() {
-    ClaudeService.resetInstance();
+    AiIntegrationService.resetInstance();
     ClaudeApiClient.resetInstance();
-    ClaudeUsageService.resetInstance();
+    AiUsageService.resetInstance(AiProvider.claude);
   });
 
-  group('ClaudeApiError', () {
+  group('AiApiError', () {
     test('keyInvalid has correct user message', () {
       expect(
-        ClaudeApiError.keyInvalid.userMessage,
+        AiApiError.keyInvalid.userMessage,
         contains('invalid'),
       );
     });
 
     test('rateLimited has correct user message', () {
       expect(
-        ClaudeApiError.rateLimited.userMessage,
+        AiApiError.rateLimited.userMessage,
         contains('usage limit'),
       );
     });
 
     test('serverError has correct user message', () {
       expect(
-        ClaudeApiError.serverError.userMessage,
-        contains("Anthropic's side"),
+        AiApiError.serverError.userMessage,
+        contains('provider'),
       );
     });
 
     test('networkOffline has correct user message', () {
       expect(
-        ClaudeApiError.networkOffline.userMessage,
+        AiApiError.networkOffline.userMessage,
         contains('No internet'),
       );
     });
 
     test('timeout has correct user message', () {
       expect(
-        ClaudeApiError.timeout.userMessage,
+        AiApiError.timeout.userMessage,
         contains('took too long'),
       );
     });
 
     test('storageFailed has correct user message', () {
       expect(
-        ClaudeApiError.storageFailed.userMessage,
+        AiApiError.storageFailed.userMessage,
         contains('Unable to save'),
       );
     });
 
     test('unknown has correct user message', () {
       expect(
-        ClaudeApiError.unknown.userMessage,
+        AiApiError.unknown.userMessage,
         contains('unexpected error'),
       );
     });
 
     test('dailyCapReached has correct user message', () {
       expect(
-        ClaudeApiError.dailyCapReached.userMessage,
+        AiApiError.dailyCapReached.userMessage,
         contains('daily token limit'),
       );
     });
 
     test('integrationPaused has correct user message', () {
       expect(
-        ClaudeApiError.integrationPaused.userMessage,
+        AiApiError.integrationPaused.userMessage,
         contains('paused'),
       );
     });
   });
 
-  group('ClaudeApiResult', () {
+  group('AiApiResult', () {
     test('isSuccess returns true when data present and no error', () {
-      final result = ClaudeApiResult(data: 'test');
+      final result = AiApiResult(data: 'test');
       expect(result.isSuccess, isTrue);
       expect(result.isError, isFalse);
     });
 
     test('isError returns true when error present', () {
-      final result = ClaudeApiResult<String>(error: ClaudeApiError.keyInvalid);
+      final result = AiApiResult<String>(error: AiApiError.keyInvalid);
       expect(result.isSuccess, isFalse);
       expect(result.isError, isTrue);
     });
 
     test('stores token usage', () {
-      final result = ClaudeApiResult(
+      final result = AiApiResult(
         data: 'test',
         inputTokens: 10,
         outputTokens: 20,
@@ -159,7 +161,7 @@ void main() {
       final result = await client.sendMessage(message: 'test');
 
       expect(result.isError, isTrue);
-      expect(result.error, equals(ClaudeApiError.integrationPaused));
+      expect(result.error, equals(AiApiError.integrationPaused));
     });
   });
 

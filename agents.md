@@ -186,7 +186,7 @@ The daily reflection screen (accessed via edit icon in home AppBar, or evening w
 
 Always add tests when implementing new functionality. Widget tests go in `test/screens/`, service
 tests in `test/services/`, and logic tests in `test/logic/`. Run `flutter test` to verify all
-tests pass before considering work complete.
+tests pass before considering work complete. Always run `flutter test` after making changes.
 
 ### Synthetic Data
 

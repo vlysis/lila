@@ -55,11 +55,8 @@ void main() {
     DateTime? date,
     List<LogEntry>? entries,
     String reflectionText = '',
+    EdgeInsets viewInsets = EdgeInsets.zero,
   }) async {
-    await tester.runAsync(() async {
-      await FileService.getInstance();
-    });
-
     final testDate = date ?? DateTime(2026, 2, 3);
     final testEntries = entries ??
         [
@@ -71,27 +68,43 @@ void main() {
           ),
         ];
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            height: 600,
-            child: DayDiscussionSheet(
-              date: testDate,
-              entries: testEntries,
-              reflectionText: reflectionText,
+    await tester.runAsync(() async {
+      await FileService.getInstance();
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) {
+            final data =
+                MediaQuery.of(context).copyWith(viewInsets: viewInsets);
+            return MediaQuery(
+              data: data,
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
+          home: Scaffold(
+            body: SizedBox(
+              height: 600,
+              child: DayDiscussionSheet(
+                date: testDate,
+                entries: testEntries,
+                reflectionText: reflectionText,
+              ),
             ),
           ),
         ),
-      ),
-    );
-
-    // Allow for async load to complete
-    await tester.runAsync(() async {
-      await Future.delayed(const Duration(milliseconds: 100));
+      );
+      await Future.delayed(const Duration(milliseconds: 800));
     });
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 800));
+  }
+
+  Future<void> pumpUntilLoaded(WidgetTester tester) async {
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+      if (find.byType(CircularProgressIndicator).evaluate().isEmpty) {
+        break;
+      }
+    }
   }
 
   group('DayDiscussionSheet UI', () {
@@ -120,6 +133,15 @@ void main() {
 
       expect(find.text('Start a conversation about your day'), findsOneWidget);
     });
+
+    testWidgets('moves input above keyboard', (tester) async {
+      await pumpDirectSheet(
+        tester,
+        viewInsets: const EdgeInsets.only(bottom: 300),
+      );
+
+      expect(find.byType(AnimatedPadding), findsOneWidget);
+    });
   });
 
   group('DayDiscussionSheet with existing discussion', () {
@@ -139,6 +161,8 @@ void main() {
         await fs.saveDiscussion(date, '''**User:** How was my morning?
 
 **Claude:** You had a productive growth-focused morning.''');
+        final stored = await fs.readDiscussion(date);
+        expect(stored, isNotNull);
       });
 
       await pumpDirectSheet(
@@ -153,10 +177,50 @@ void main() {
           ),
         ],
       );
+      await pumpUntilLoaded(tester);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
 
       // Should show the existing messages
       expect(find.text('How was my morning?'), findsOneWidget);
       expect(find.text('You had a productive growth-focused morning.'), findsOneWidget);
+    });
+
+    testWidgets('parses Assistant label in saved discussion', (tester) async {
+      final date = DateTime(2026, 2, 3);
+
+      await tester.runAsync(() async {
+        final fs = await FileService.getInstance();
+        final entry = LogEntry(
+          label: 'Test',
+          mode: Mode.growth,
+          orientation: LogOrientation.self_,
+          timestamp: date.add(const Duration(hours: 10)),
+        );
+        await fs.appendEntry(entry);
+        await fs.saveDiscussion(date, '''**User:** Noticing patterns
+
+**Assistant:** That sounds like a reflective moment.''');
+        final stored = await fs.readDiscussion(date);
+        expect(stored, isNotNull);
+      });
+
+      await pumpDirectSheet(
+        tester,
+        date: date,
+        entries: [
+          LogEntry(
+            label: 'Test',
+            mode: Mode.growth,
+            orientation: LogOrientation.self_,
+            timestamp: date.add(const Duration(hours: 10)),
+          ),
+        ],
+      );
+      await pumpUntilLoaded(tester);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+
+      expect(find.text('Noticing patterns'), findsOneWidget);
+      expect(find.text('That sounds like a reflective moment.'), findsOneWidget);
     });
   });
 

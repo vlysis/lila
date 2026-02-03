@@ -117,13 +117,13 @@ Felt good today.
 
 **User:** How was my day?
 
-**Claude:** You had a productive morning.
+**Assistant:** You had a productive morning.
 ''');
 
       final result = await fs.readDiscussion(date);
       expect(result, isNotNull);
       expect(result, contains('**User:** How was my day?'));
-      expect(result, contains('**Claude:** You had a productive morning.'));
+      expect(result, contains('**Assistant:** You had a productive morning.'));
     });
   });
 
@@ -142,13 +142,13 @@ Felt good today.
       await fs.appendEntry(entry);
 
       // Save discussion
-      await fs.saveDiscussion(date, '**User:** Hello\n\n**Claude:** Hi there!');
+      await fs.saveDiscussion(date, '**User:** Hello\n\n**Assistant:** Hi there!');
 
       // Verify
       final content = await fs.readDailyRaw(date);
       expect(content, contains('## Discussion'));
       expect(content, contains('**User:** Hello'));
-      expect(content, contains('**Claude:** Hi there!'));
+      expect(content, contains('**Assistant:** Hi there!'));
     });
 
     test('updates existing discussion section', () async {
@@ -170,15 +170,15 @@ type: daily
 
 **User:** Old message
 
-**Claude:** Old reply
+**Assistant:** Old reply
 ''');
 
       // Update discussion
-      await fs.saveDiscussion(date, '**User:** New message\n\n**Claude:** New reply');
+      await fs.saveDiscussion(date, '**User:** New message\n\n**Assistant:** New reply');
 
       final content = await fs.readDailyRaw(date);
       expect(content, contains('**User:** New message'));
-      expect(content, contains('**Claude:** New reply'));
+      expect(content, contains('**Assistant:** New reply'));
       expect(content, isNot(contains('Old message')));
     });
 

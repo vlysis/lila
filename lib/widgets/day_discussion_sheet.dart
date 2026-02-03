@@ -2,7 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/log_entry.dart';
-import '../services/claude_api_client.dart';
+import '../services/ai_api_types.dart';
+import '../services/ai_chat_client.dart';
 import '../services/file_service.dart';
 
 /// A chat message in the discussion.
@@ -13,7 +14,7 @@ class _ChatMessage {
   _ChatMessage({required this.role, required this.content});
 }
 
-/// Bottom sheet for discussing the day with Claude.
+/// Bottom sheet for discussing the day with AI.
 class DayDiscussionSheet extends StatefulWidget {
   final DateTime date;
   final List<LogEntry> entries;
@@ -87,7 +88,8 @@ class _DayDiscussionSheetState extends State<DayDiscussionSheet> {
         currentRole = 'user';
         contentBuffer.clear();
         contentBuffer.write(line.substring('**User:** '.length));
-      } else if (line.startsWith('**Claude:** ')) {
+      } else if (line.startsWith('**Assistant:** ') ||
+          line.startsWith('**Claude:** ')) {
         if (currentRole != null) {
           messages.add(_ChatMessage(
             role: currentRole,
@@ -96,7 +98,10 @@ class _DayDiscussionSheetState extends State<DayDiscussionSheet> {
         }
         currentRole = 'assistant';
         contentBuffer.clear();
-        contentBuffer.write(line.substring('**Claude:** '.length));
+        final label = line.startsWith('**Assistant:** ')
+            ? '**Assistant:** '
+            : '**Claude:** ';
+        contentBuffer.write(line.substring(label.length));
       } else if (currentRole != null) {
         contentBuffer.write('\n$line');
       }
@@ -115,7 +120,7 @@ class _DayDiscussionSheetState extends State<DayDiscussionSheet> {
   String _buildDiscussionMarkdown() {
     final buffer = StringBuffer();
     for (final msg in _messages) {
-      final roleLabel = msg.role == 'user' ? 'User' : 'Claude';
+      final roleLabel = msg.role == 'user' ? 'User' : 'Assistant';
       buffer.writeln('**$roleLabel:** ${msg.content}');
       buffer.writeln();
     }
@@ -180,7 +185,7 @@ Ask thoughtful questions. Make gentle observations. Keep responses concise (2-3 
 
     _scrollToBottom();
 
-    final client = await ClaudeApiClient.getInstance();
+    final client = await AiChatClient.getInstance();
 
     // Build message history for API
     final history = _messages
@@ -208,9 +213,7 @@ Ask thoughtful questions. Make gentle observations. Keep responses concise (2-3 
       setState(() {
         _sending = false;
         _errorMessage = result.error?.userMessage ?? 'An error occurred.';
-        _canRetry = result.error == ClaudeApiError.networkOffline ||
-            result.error == ClaudeApiError.timeout ||
-            result.error == ClaudeApiError.serverError;
+        _canRetry = result.error?.isRetryable ?? false;
       });
     }
   }
@@ -247,86 +250,93 @@ Ask thoughtful questions. Make gentle observations. Keep responses concise (2-3 
       maxChildSize: 0.95,
       expand: false,
       builder: (context, scrollController) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFF1A1A1A),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-              // Handle bar
-              Padding(
-                padding: const EdgeInsets.only(top: 12, bottom: 8),
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(2),
+        final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+        return AnimatedPadding(
+          padding: EdgeInsets.only(bottom: bottomInset),
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Color(0xFF1A1A1A),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              children: [
+                // Handle bar
+                Padding(
+                  padding: const EdgeInsets.only(top: 12, bottom: 8),
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
-              ),
-              // Header
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Discuss your day',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.9),
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        Icons.close,
-                        color: Colors.white.withValues(alpha: 0.5),
-                      ),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(color: Color(0xFF2A2A2A), height: 1),
-              // Messages
-              Expanded(
-                child: _loading
-                    ? const Center(
-                        child: CircularProgressIndicator(
-                          color: Color(0xFF7B9EA8),
-                          strokeWidth: 2,
+                // Header
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Discuss your day',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w500,
                         ),
-                      )
-                    : GestureDetector(
-                        onTap: () => _inputFocusNode.unfocus(),
-                        child: _messages.isEmpty
-                            ? _buildEmptyState()
-                            : ListView.builder(
-                                controller: _scrollController,
-                                padding:
-                                    const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                                itemCount: _messages.length +
-                                    (_sending ? 1 : 0) +
-                                    (_errorMessage != null ? 1 : 0),
-                                itemBuilder: (context, index) {
-                                  if (index < _messages.length) {
-                                    return _buildMessageBubble(_messages[index]);
-                                  } else if (_sending) {
-                                    return _buildTypingIndicator();
-                                  } else if (_errorMessage != null) {
-                                    return _buildErrorMessage();
-                                  }
-                                  return const SizedBox.shrink();
-                                },
-                              ),
                       ),
-              ),
-              // Input area
-              _buildInputArea(),
-            ],
+                      IconButton(
+                        icon: Icon(
+                          Icons.close,
+                          color: Colors.white.withValues(alpha: 0.5),
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(color: Color(0xFF2A2A2A), height: 1),
+                // Messages
+                Expanded(
+                  child: _loading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            color: Color(0xFF7B9EA8),
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : GestureDetector(
+                          onTap: () => _inputFocusNode.unfocus(),
+                          child: _messages.isEmpty
+                              ? _buildEmptyState()
+                              : ListView.builder(
+                                  controller: _scrollController,
+                                  padding:
+                                      const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                                  itemCount: _messages.length +
+                                      (_sending ? 1 : 0) +
+                                      (_errorMessage != null ? 1 : 0),
+                                  itemBuilder: (context, index) {
+                                    if (index < _messages.length) {
+                                      return _buildMessageBubble(
+                                          _messages[index]);
+                                    } else if (_sending) {
+                                      return _buildTypingIndicator();
+                                    } else if (_errorMessage != null) {
+                                      return _buildErrorMessage();
+                                    }
+                                    return const SizedBox.shrink();
+                                  },
+                                ),
+                        ),
+                ),
+                // Input area
+                _buildInputArea(),
+              ],
+            ),
           ),
         );
       },
@@ -480,12 +490,7 @@ Ask thoughtful questions. Make gentle observations. Keep responses concise (2-3 
 
   Widget _buildInputArea() {
     return Container(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        12,
-        16,
-        12 + MediaQuery.of(context).viewInsets.bottom,
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: const BoxDecoration(
         color: Color(0xFF1A1A1A),
         border: Border(
