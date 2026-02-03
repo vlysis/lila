@@ -132,11 +132,16 @@ class ClaudeApiClient {
   }
 
   /// Sends a message to Claude and returns the response.
+  ///
+  /// If [messageHistory] is provided, it should be a list of message maps
+  /// with 'role' ('user' or 'assistant') and 'content' keys. The [message]
+  /// parameter will be appended as the final user message.
   Future<ClaudeApiResult<String>> sendMessage({
     required String message,
     String? model,
     int maxTokens = 1024,
     String? systemPrompt,
+    List<Map<String, String>>? messageHistory,
   }) async {
     // Check if integration is enabled
     if (!_claudeService.isEnabled) {
@@ -156,12 +161,17 @@ class ClaudeApiClient {
 
     final selectedModel = model ?? _claudeService.selectedModel;
 
+    // Build messages array from history plus new message
+    final messages = <Map<String, String>>[];
+    if (messageHistory != null) {
+      messages.addAll(messageHistory);
+    }
+    messages.add({'role': 'user', 'content': message});
+
     final body = <String, dynamic>{
       'model': selectedModel,
       'max_tokens': maxTokens,
-      'messages': [
-        {'role': 'user', 'content': message}
-      ],
+      'messages': messages,
     };
 
     if (systemPrompt != null) {

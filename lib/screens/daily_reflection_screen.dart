@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/log_entry.dart';
 import '../services/file_service.dart';
+import '../services/claude_service.dart';
+import '../widgets/day_discussion_sheet.dart';
 
 class DailyReflectionScreen extends StatefulWidget {
   final DateTime date;
@@ -17,6 +19,7 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
   List<LogEntry> _entries = [];
   String _savedReflectionText = '';
   bool _loading = true;
+  bool _claudeEnabled = false;
 
   final _reflectionController = TextEditingController();
   Timer? _saveTimer;
@@ -59,11 +62,13 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
     final fs = await FileService.getInstance();
     final entries = await fs.readDailyEntries(widget.date);
     final reflection = await fs.readDailyReflection(widget.date);
+    final claudeService = await ClaudeService.getInstance();
 
     if (mounted) {
       setState(() {
         _entries = entries;
         _savedReflectionText = reflection;
+        _claudeEnabled = claudeService.isEnabled;
         if (_loading) {
           _reflectionController.text = reflection;
         }
@@ -103,6 +108,19 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
     if (mounted) {
       await _load();
     }
+  }
+
+  void _openDiscussion() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DayDiscussionSheet(
+        date: widget.date,
+        entries: _entries,
+        reflectionText: _reflectionController.text,
+      ),
+    );
   }
 
   String _buildSummaryText() {
@@ -286,6 +304,37 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
                         ),
                       ),
                     ),
+                    if (_claudeEnabled) ...[
+                      const SizedBox(height: 24),
+                      Center(
+                        child: OutlinedButton.icon(
+                          onPressed: _openDiscussion,
+                          icon: Icon(
+                            Icons.chat_bubble_outline,
+                            size: 18,
+                            color: Colors.white.withValues(alpha: 0.6),
+                          ),
+                          label: Text(
+                            'Discuss your day',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 15,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 24, vertical: 12),
+                            side: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.15),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

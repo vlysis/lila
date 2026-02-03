@@ -268,4 +268,40 @@ class FileService {
     }
     await _ensureDirectories();
   }
+
+  /// Reads the Discussion section from a daily file.
+  /// Returns null if no discussion exists.
+  Future<String?> readDiscussion(DateTime date) async {
+    final path = _dailyFilePath(date);
+    final file = File(path);
+    if (!await file.exists()) return null;
+
+    final content = await file.readAsString();
+    final match = RegExp(
+      r'## Discussion\n\n([\s\S]*?)(?=\n## |$)',
+    ).firstMatch(content);
+    if (match == null) return null;
+    final text = match.group(1)?.trim();
+    return (text == null || text.isEmpty) ? null : text;
+  }
+
+  /// Saves the Discussion section to a daily file.
+  /// Discussion is placed after Reflection (last in file).
+  Future<void> saveDiscussion(DateTime date, String markdown) async {
+    final path = _dailyFilePath(date);
+    await _ensureDailyFile(path, date);
+
+    var content = await File(path).readAsString();
+    final discussionSection = '\n\n## Discussion\n\n$markdown';
+
+    if (content.contains('## Discussion')) {
+      content = content.replaceFirst(
+        RegExp(r'\n*## Discussion\n\n[\s\S]*?(?=\n## |$)'),
+        discussionSection,
+      );
+    } else {
+      content += discussionSection;
+    }
+    await File(path).writeAsString(content);
+  }
 }
