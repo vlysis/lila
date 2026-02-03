@@ -1,5 +1,10 @@
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../services/claude_api_client.dart';
+import '../services/claude_service.dart';
+import '../services/claude_usage_service.dart';
 import '../services/file_service.dart';
 import '../services/synthetic_data_service.dart';
 
@@ -13,15 +18,395 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   String _vaultPath = '';
 
+  // Claude integration state
+  ClaudeService? _claudeService;
+  ClaudeUsageService? _usageService;
+  bool _claudeEnabled = false;
+  bool _hasApiKey = false;
+  String? _maskedKey;
+  String _selectedModel = 'claude-haiku-4-5-20251001';
+  String _usageSummary = '';
+  int _dailyCap = 0;
+  final _apiKeyController = TextEditingController();
+  bool _isEnteringKey = false;
+  String? _keyError;
+  bool _isSavingKey = false;
+
+  // Available models
+  static const _availableModels = [
+    ('claude-haiku-4-5-20251001', 'Haiku (fastest, cheapest)'),
+    ('claude-sonnet-4-20250514', 'Sonnet (balanced)'),
+    ('claude-opus-4-20250514', 'Opus (most capable)'),
+  ];
+
   @override
   void initState() {
     super.initState();
     _loadPath();
+    _loadClaudeState();
+  }
+
+  @override
+  void dispose() {
+    _apiKeyController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPath() async {
     final fs = await FileService.getInstance();
     if (mounted) setState(() => _vaultPath = fs.rootDir);
+  }
+
+  Future<void> _loadClaudeState() async {
+    final claude = await ClaudeService.getInstance();
+    final usage = await ClaudeUsageService.getInstance();
+    if (mounted) {
+      setState(() {
+        _claudeService = claude;
+        _usageService = usage;
+        _claudeEnabled = claude.isEnabled;
+        _hasApiKey = claude.hasApiKey;
+        _maskedKey = claude.maskedKey;
+        _selectedModel = claude.selectedModel;
+        _usageSummary = usage.usageSummary;
+        _dailyCap = usage.dailyCap;
+      });
+    }
+  }
+
+  void _changeVaultPath() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(Icons.folder_open,
+                    color: Colors.white.withValues(alpha: 0.6)),
+                title: Text('Choose existing folder',
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.8))),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickExistingFolder();
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.create_new_folder,
+                    color: Colors.white.withValues(alpha: 0.6)),
+                title: Text('Create new folder',
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.8))),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _createNewFolder();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickExistingFolder() async {
+    final result = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: 'Choose vault location',
+      initialDirectory: _vaultPath,
+    );
+    if (result == null) return;
+    await _applyVaultPath(result);
+  }
+
+  Future<void> _createNewFolder() async {
+    final nameController = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: Text('New folder name',
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.9))),
+        content: TextField(
+          controller: nameController,
+          autofocus: true,
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
+          decoration: InputDecoration(
+            hintText: 'e.g. Lila',
+            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
+            enabledBorder: UnderlineInputBorder(
+              borderSide:
+                  BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+            ),
+            focusedBorder: UnderlineInputBorder(
+              borderSide:
+                  BorderSide(color: Colors.white.withValues(alpha: 0.5)),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel',
+                style:
+                    TextStyle(color: Colors.white.withValues(alpha: 0.5))),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(ctx, nameController.text.trim()),
+            child: Text('Next',
+                style:
+                    TextStyle(color: Colors.white.withValues(alpha: 0.8))),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty) return;
+
+    if (!mounted) return;
+    final parent = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: 'Choose where to create "$name"',
+      initialDirectory: _vaultPath,
+    );
+    if (parent == null) return;
+
+    final newDir = Directory('$parent/$name');
+    await newDir.create(recursive: true);
+    await _applyVaultPath(newDir.path);
+  }
+
+  Future<void> _applyVaultPath(String path) async {
+    final fs = await FileService.getInstance();
+    await fs.setVaultPath(path);
+    if (mounted) {
+      setState(() => _vaultPath = path);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Vault location updated.'),
+          backgroundColor: Colors.white.withValues(alpha: 0.1),
+        ),
+      );
+    }
+  }
+
+  void _startKeyEntry() {
+    setState(() {
+      _isEnteringKey = true;
+      _keyError = null;
+      _apiKeyController.clear();
+    });
+  }
+
+  void _cancelKeyEntry() {
+    setState(() {
+      _isEnteringKey = false;
+      _keyError = null;
+      _apiKeyController.clear();
+    });
+  }
+
+  Future<void> _saveApiKey() async {
+    if (_claudeService == null) return;
+
+    final key = _apiKeyController.text.trim();
+    final formatError = ClaudeService.validateKeyFormat(key);
+    if (formatError != null) {
+      setState(() => _keyError = formatError);
+      return;
+    }
+
+    setState(() {
+      _isSavingKey = true;
+      _keyError = null;
+    });
+
+    // Validate key with API before saving
+    final apiClient = await ClaudeApiClient.getInstance();
+    final validationError = await apiClient.validateApiKey(key);
+
+    if (!mounted) return;
+
+    if (validationError != null) {
+      setState(() {
+        _keyError = validationError.userMessage;
+        _isSavingKey = false;
+      });
+      return;
+    }
+
+    // Key is valid, save it
+    final saveError = await _claudeService!.saveApiKey(key);
+
+    if (!mounted) return;
+
+    if (saveError != null) {
+      setState(() {
+        _keyError = saveError;
+        _isSavingKey = false;
+      });
+    } else {
+      setState(() {
+        _hasApiKey = true;
+        _maskedKey = _claudeService!.maskedKey;
+        _isEnteringKey = false;
+        _isSavingKey = false;
+        _apiKeyController.clear();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('API key validated and saved.'),
+          backgroundColor: Colors.white.withValues(alpha: 0.1),
+        ),
+      );
+    }
+  }
+
+  Future<void> _toggleClaudeEnabled(bool enabled) async {
+    if (_claudeService == null) return;
+    await _claudeService!.setEnabled(enabled);
+    if (mounted) {
+      setState(() => _claudeEnabled = enabled);
+    }
+  }
+
+  void _confirmDeleteKey() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: Text(
+          'Remove API key?',
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.9)),
+        ),
+        content: Text(
+          'This will disable Claude integration and remove your saved key.',
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _claudeService?.deleteApiKey();
+              if (mounted) {
+                setState(() {
+                  _hasApiKey = false;
+                  _maskedKey = null;
+                  _claudeEnabled = false;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('API key removed.'),
+                    backgroundColor: Colors.white.withValues(alpha: 0.1),
+                  ),
+                );
+              }
+            },
+            child: const Text(
+              'Remove',
+              style: TextStyle(color: Color(0xFFCF6679)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _onKeyFieldPaste() {
+    // Clear clipboard after paste for security
+    Future.delayed(const Duration(milliseconds: 100), () {
+      ClaudeService.clearClipboard();
+    });
+  }
+
+  Future<void> _changeModel(String model) async {
+    await _claudeService?.setModel(model);
+    if (mounted) {
+      setState(() => _selectedModel = model);
+    }
+  }
+
+  void _showDailyCapDialog() {
+    final controller = TextEditingController(
+      text: _dailyCap > 0 ? (_dailyCap ~/ 1000).toString() : '',
+    );
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: Text(
+          'Daily token limit',
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.9)),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Set a daily limit (in thousands of tokens) to control costs. Leave empty for no limit.',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.6),
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
+              decoration: InputDecoration(
+                hintText: 'e.g., 100 for 100K tokens',
+                hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
+                suffixText: 'K tokens',
+                suffixStyle: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                ),
+                focusedBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.5)),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final text = controller.text.trim();
+              final cap = text.isEmpty ? 0 : (int.tryParse(text) ?? 0) * 1000;
+              await _usageService?.setDailyCap(cap);
+              if (mounted) {
+                setState(() => _dailyCap = cap);
+              }
+            },
+            child: Text(
+              'Save',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _generateTestData() async {
@@ -107,13 +492,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           _buildSection(
             'Vault location',
-            Text(
-              _vaultPath,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.4),
-                fontSize: 13,
-                fontFamily: 'monospace',
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _vaultPath,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.4),
+                    fontSize: 13,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: _changeVaultPath,
+                  child: Text(
+                    'Change',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.6),
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 32),
@@ -128,6 +529,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 height: 1.5,
               ),
             ),
+          ),
+          const SizedBox(height: 32),
+          _buildSection(
+            'AI & Integrations',
+            _buildClaudeSection(),
           ),
           if (kDebugMode) ...[
             const SizedBox(height: 32),
@@ -164,6 +570,313 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildClaudeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Toggle row
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Claude integration',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.8),
+                fontSize: 14,
+              ),
+            ),
+            Switch(
+              value: _claudeEnabled,
+              onChanged: _hasApiKey ? _toggleClaudeEnabled : null,
+              activeThumbColor: const Color(0xFF6B8AFF),
+              activeTrackColor: const Color(0xFF6B8AFF).withValues(alpha: 0.4),
+              inactiveThumbColor: Colors.white.withValues(alpha: 0.3),
+              inactiveTrackColor: Colors.white.withValues(alpha: 0.1),
+            ),
+          ],
+        ),
+
+        // Status text
+        if (!_hasApiKey && !_isEnteringKey)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Enter an API key below to enable.',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.4),
+                fontSize: 13,
+              ),
+            ),
+          ),
+
+        const SizedBox(height: 16),
+
+        // Key display or input
+        if (_hasApiKey && !_isEnteringKey) ...[
+          // Masked key display
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.key,
+                  size: 16,
+                  color: Colors.white.withValues(alpha: 0.4),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _maskedKey ?? '***',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.6),
+                      fontSize: 13,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Change and Remove buttons
+          Row(
+            children: [
+              GestureDetector(
+                onTap: _startKeyEntry,
+                child: Text(
+                  'Change key',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 24),
+              GestureDetector(
+                onTap: _confirmDeleteKey,
+                child: const Text(
+                  'Remove key',
+                  style: TextStyle(
+                    color: Color(0xFFCF6679),
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ] else ...[
+          // Key input field
+          Focus(
+            onFocusChange: (hasFocus) {
+              if (!hasFocus && _apiKeyController.text.isNotEmpty) {
+                // Clear clipboard when focus is lost after pasting
+                ClaudeService.clearClipboard();
+              }
+            },
+            child: TextField(
+              controller: _apiKeyController,
+              obscureText: true,
+              autocorrect: false,
+              enableSuggestions: false,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.8),
+                fontSize: 14,
+                fontFamily: 'monospace',
+              ),
+              decoration: InputDecoration(
+                hintText: 'sk-ant-api03-...',
+                hintStyle: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  fontFamily: 'monospace',
+                ),
+                errorText: _keyError,
+                errorStyle: const TextStyle(color: Color(0xFFCF6679)),
+                filled: true,
+                fillColor: Colors.white.withValues(alpha: 0.05),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+              ),
+              onChanged: (value) {
+                // Trim whitespace and newlines on paste
+                final trimmed = value.trim().replaceAll('\n', '');
+                if (trimmed != value) {
+                  _apiKeyController.text = trimmed;
+                  _apiKeyController.selection = TextSelection.fromPosition(
+                    TextPosition(offset: trimmed.length),
+                  );
+                  _onKeyFieldPaste();
+                }
+                // Clear error when typing
+                if (_keyError != null) {
+                  setState(() => _keyError = null);
+                }
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Save and Cancel buttons
+          Row(
+            children: [
+              ElevatedButton(
+                onPressed: _isSavingKey ? null : _saveApiKey,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6B8AFF),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: _isSavingKey
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text('Save key'),
+              ),
+              if (_hasApiKey || _isEnteringKey) ...[
+                const SizedBox(width: 12),
+                TextButton(
+                  onPressed: _cancelKeyEntry,
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+
+        // Model selector and usage (only show when key is saved)
+        if (_hasApiKey && !_isEnteringKey) ...[
+          const SizedBox(height: 24),
+          // Model selector
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Model',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  fontSize: 14,
+                ),
+              ),
+              DropdownButton<String>(
+                value: _selectedModel,
+                dropdownColor: const Color(0xFF2A2A2A),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  fontSize: 14,
+                ),
+                underline: const SizedBox(),
+                icon: Icon(
+                  Icons.arrow_drop_down,
+                  color: Colors.white.withValues(alpha: 0.5),
+                ),
+                items: _availableModels.map((model) {
+                  return DropdownMenuItem(
+                    value: model.$1,
+                    child: Text(model.$2),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) _changeModel(value);
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Usage display
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Usage',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  fontSize: 14,
+                ),
+              ),
+              Text(
+                _usageSummary,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Daily cap
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Daily limit',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  fontSize: 14,
+                ),
+              ),
+              GestureDetector(
+                onTap: _showDailyCapDialog,
+                child: Row(
+                  children: [
+                    Text(
+                      _dailyCap > 0
+                          ? ClaudeUsageService.formatTokens(_dailyCap)
+                          : 'No limit',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.edit,
+                      size: 14,
+                      color: Colors.white.withValues(alpha: 0.4),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+
+        const SizedBox(height: 16),
+        Text(
+          'Your API key is stored securely on this device and never sent anywhere except to Anthropic.',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.35),
+            fontSize: 12,
+            height: 1.4,
+          ),
+        ),
+      ],
     );
   }
 

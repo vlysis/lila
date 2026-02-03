@@ -7,6 +7,42 @@ enum Mode {
   String get label {
     return name[0].toUpperCase() + name.substring(1);
   }
+
+  List<DurationPreset> get durationPresets {
+    switch (this) {
+      case Mode.nourishment:
+        return [DurationPreset.moment, DurationPreset.stretch, DurationPreset.immersive];
+      case Mode.growth:
+        return [DurationPreset.focused, DurationPreset.deep, DurationPreset.extended];
+      case Mode.maintenance:
+        return [DurationPreset.quick, DurationPreset.routine, DurationPreset.heavy];
+      case Mode.drift:
+        return [DurationPreset.brief, DurationPreset.lost, DurationPreset.spiral];
+    }
+  }
+}
+
+enum DurationPreset {
+  // Nourishment
+  moment,
+  stretch,
+  immersive,
+  // Growth
+  focused,
+  deep,
+  extended,
+  // Maintenance
+  quick,
+  routine,
+  heavy,
+  // Drift
+  brief,
+  lost,
+  spiral;
+
+  String get label {
+    return name[0].toUpperCase() + name.substring(1);
+  }
 }
 
 enum LogOrientation {
@@ -41,12 +77,14 @@ class LogEntry {
   final String? label;
   final Mode mode;
   final LogOrientation orientation;
+  final DurationPreset? duration;
   final DateTime timestamp;
 
   LogEntry({
     this.label,
     required this.mode,
     required this.orientation,
+    this.duration,
     required this.timestamp,
   });
 
@@ -58,6 +96,9 @@ class LogEntry {
     buffer.writeln('- **$activityLabel**  ');
     buffer.writeln('  mode:: ${mode.name}  ');
     buffer.writeln('  orientation:: ${orientation.markdownValue}  ');
+    if (duration != null) {
+      buffer.writeln('  duration:: ${duration!.name}  ');
+    }
     buffer.writeln('  at:: $time');
     return buffer.toString();
   }
@@ -67,6 +108,7 @@ class LogEntry {
     final modeMatch = RegExp(r'mode:: (\w+)').firstMatch(block);
     final orientationMatch =
         RegExp(r'orientation:: (\w+)').firstMatch(block);
+    final durationMatch = RegExp(r'duration:: (\w+)').firstMatch(block);
     final timeMatch = RegExp(r'at:: (\d{2}:\d{2})').firstMatch(block);
 
     if (modeMatch == null || orientationMatch == null) return null;
@@ -80,6 +122,14 @@ class LogEntry {
         .firstOrNull;
 
     if (mode == null || orientation == null) return null;
+
+    DurationPreset? duration;
+    if (durationMatch != null) {
+      final durationName = durationMatch.group(1)!;
+      duration = DurationPreset.values
+          .where((d) => d.name == durationName)
+          .firstOrNull;
+    }
 
     DateTime timestamp = DateTime.now();
     if (timeMatch != null) {
@@ -97,6 +147,7 @@ class LogEntry {
       label: labelMatch?.group(1),
       mode: mode,
       orientation: orientation,
+      duration: duration,
       timestamp: timestamp,
     );
   }

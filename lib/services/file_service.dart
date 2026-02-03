@@ -1,9 +1,12 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/log_entry.dart';
 
 class FileService {
+  static const _vaultPathKey = 'custom_vault_path';
   static FileService? _instance;
   late String _rootDir;
 
@@ -17,11 +20,53 @@ class FileService {
     return _instance!;
   }
 
-  Future<void> _init() async {
+  static Future<String> get defaultPath async {
     final appDir = await getApplicationDocumentsDirectory();
-    _rootDir = '${appDir.path}/Lila';
+    return '${appDir.path}/Lila';
+  }
+
+  Future<void> _init() async {
+    final prefs = await SharedPreferences.getInstance();
+    final custom = prefs.getString(_vaultPathKey);
+    if (custom != null && custom.isNotEmpty) {
+      // Test if we still have write access to the custom path
+      if (await _hasWriteAccess(custom)) {
+        _rootDir = custom;
+      } else {
+        // Permission lost (e.g., macOS sandbox after restart), fall back to default
+        await prefs.remove(_vaultPathKey);
+        _rootDir = await defaultPath;
+      }
+    } else {
+      _rootDir = await defaultPath;
+    }
     await _ensureDirectories();
   }
+
+  Future<bool> _hasWriteAccess(String path) async {
+    try {
+      final testFile = File('$path/.lila_access_test');
+      await testFile.writeAsString('test');
+      await testFile.delete();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> setVaultPath(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (path == await defaultPath) {
+      await prefs.remove(_vaultPathKey);
+    } else {
+      await prefs.setString(_vaultPathKey, path);
+    }
+    _rootDir = path;
+    await _ensureDirectories();
+  }
+
+  @visibleForTesting
+  static void resetInstance() => _instance = null;
 
   String get rootDir => _rootDir;
 

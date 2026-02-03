@@ -9,6 +9,37 @@ void main() {
       expect(Mode.maintenance.label, 'Maintenance');
       expect(Mode.drift.label, 'Drift');
     });
+
+    test('durationPresets returns correct presets for each mode', () {
+      expect(Mode.nourishment.durationPresets, [
+        DurationPreset.moment,
+        DurationPreset.stretch,
+        DurationPreset.immersive,
+      ]);
+      expect(Mode.growth.durationPresets, [
+        DurationPreset.focused,
+        DurationPreset.deep,
+        DurationPreset.extended,
+      ]);
+      expect(Mode.maintenance.durationPresets, [
+        DurationPreset.quick,
+        DurationPreset.routine,
+        DurationPreset.heavy,
+      ]);
+      expect(Mode.drift.durationPresets, [
+        DurationPreset.brief,
+        DurationPreset.lost,
+        DurationPreset.spiral,
+      ]);
+    });
+  });
+
+  group('DurationPreset', () {
+    test('label capitalizes first letter', () {
+      expect(DurationPreset.moment.label, 'Moment');
+      expect(DurationPreset.deep.label, 'Deep');
+      expect(DurationPreset.spiral.label, 'Spiral');
+    });
   });
 
   group('LogOrientation', () {
@@ -73,6 +104,29 @@ void main() {
       final md = entry.toMarkdown();
       expect(md, contains('at:: 07:03'));
     });
+
+    test('includes duration when provided', () {
+      final entry = LogEntry(
+        label: 'Reading',
+        mode: Mode.growth,
+        orientation: LogOrientation.self_,
+        duration: DurationPreset.deep,
+        timestamp: DateTime(2026, 2, 2, 10, 32),
+      );
+      final md = entry.toMarkdown();
+      expect(md, contains('duration:: deep'));
+    });
+
+    test('omits duration when null', () {
+      final entry = LogEntry(
+        label: 'Reading',
+        mode: Mode.growth,
+        orientation: LogOrientation.self_,
+        timestamp: DateTime(2026, 2, 2, 10, 32),
+      );
+      final md = entry.toMarkdown();
+      expect(md, isNot(contains('duration::')));
+    });
   });
 
   group('LogEntry.fromMarkdown', () {
@@ -89,6 +143,50 @@ void main() {
       expect(entry.orientation, LogOrientation.self_);
       expect(entry.timestamp.hour, 10);
       expect(entry.timestamp.minute, 32);
+    });
+
+    test('parses entry with duration', () {
+      const block = '''- **Reading**
+  mode:: growth
+  orientation:: self
+  duration:: deep
+  at:: 10:32''';
+
+      final entry = LogEntry.fromMarkdown(block);
+      expect(entry, isNotNull);
+      expect(entry!.duration, DurationPreset.deep);
+    });
+
+    test('parses entry without duration', () {
+      const block = '''- **Reading**
+  mode:: growth
+  orientation:: self
+  at:: 10:32''';
+
+      final entry = LogEntry.fromMarkdown(block);
+      expect(entry, isNotNull);
+      expect(entry!.duration, isNull);
+    });
+
+    test('parses all duration preset types', () {
+      for (final d in DurationPreset.values) {
+        final block = '- **Test**  \n  mode:: growth  \n  orientation:: self  \n  duration:: ${d.name}  \n  at:: 12:00';
+        final entry = LogEntry.fromMarkdown(block);
+        expect(entry, isNotNull, reason: 'Failed to parse duration ${d.name}');
+        expect(entry!.duration, d);
+      }
+    });
+
+    test('ignores invalid duration name', () {
+      const block = '''- **Reading**
+  mode:: growth
+  orientation:: self
+  duration:: invalid
+  at:: 10:32''';
+
+      final entry = LogEntry.fromMarkdown(block);
+      expect(entry, isNotNull);
+      expect(entry!.duration, isNull);
     });
 
     test('parses all mode types', () {
@@ -170,6 +268,22 @@ void main() {
       expect(parsed.orientation, LogOrientation.mutual);
       expect(parsed.timestamp.hour, 14);
       expect(parsed.timestamp.minute, 30);
+    });
+
+    test('toMarkdown then fromMarkdown preserves duration', () {
+      final original = LogEntry(
+        label: 'Deep work',
+        mode: Mode.growth,
+        orientation: LogOrientation.self_,
+        duration: DurationPreset.extended,
+        timestamp: DateTime(2026, 2, 2, 9, 0),
+      );
+
+      final md = original.toMarkdown();
+      final parsed = LogEntry.fromMarkdown(md);
+
+      expect(parsed, isNotNull);
+      expect(parsed!.duration, DurationPreset.extended);
     });
 
     test('roundtrip works for all mode+orientation combos', () {

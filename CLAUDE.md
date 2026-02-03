@@ -18,7 +18,14 @@ flutter test               # run tests
 
 - **Framework:** Flutter (Android + macOS)
 - **Storage:** Local `.md` files only, no database
-- **Vault path:** `<app documents>/Lila/`
+- **Vault path:** `<app documents>/Lila/` by default, user-configurable in Settings
+  - Custom path persisted via `SharedPreferences` (`custom_vault_path` key)
+  - `FileService.setVaultPath()` updates the path, creates directories, and persists the preference
+  - Changing path does not move existing data; old vault remains at its original location
+  - Settings uses native folder picker (`file_picker` package) with two options:
+    - "Choose existing folder" — opens OS folder picker
+    - "Create new folder" — prompts for name, then picks parent location
+  - **macOS sandbox:** Custom paths lose permission after app restart. `FileService._init()` tests write access and falls back to default path if permission is lost. Requires `com.apple.security.files.user-selected.read-write` entitlement.
   - `Daily/YYYY-MM-DD.md` — daily log entries + optional `## Reflection` section
   - `Activities/` — reserved for future use
   - `Weekly/YYYY-Www.md` — auto-generated weekly summaries + user reflections
@@ -32,6 +39,9 @@ lib/
   models/log_entry.dart            # Mode, LogOrientation, LogEntry (with MD serialization)
   services/
     file_service.dart              # File I/O: create/append/read daily + weekly .md files, daily/weekly reflections
+    claude_service.dart            # Claude API key storage, integration toggle, format validation
+    claude_api_client.dart         # Dio HTTP client for Claude API with retry, error handling, log redaction
+    claude_usage_service.dart      # Token usage tracking, daily caps, UTC midnight reset
     synthetic_data_service.dart    # Generates 7 days of test data (debug only)
     weekly_summary_service.dart    # Builds weekly markdown summaries
   screens/
@@ -39,9 +49,9 @@ lib/
     daily_detail_screen.dart       # Read-only entry list with mode/orientation badges
     daily_reflection_screen.dart   # End-of-day reflection: day summary, entry cards, free-text reflection
     weekly_review_screen.dart      # Weekly visualizations and reflections
-    settings_screen.dart           # Vault path, Obsidian info, reset vault, test data
+    settings_screen.dart           # Vault path (changeable), Obsidian info, reset vault, test data
   widgets/
-    log_bottom_sheet.dart          # Log flow: mode grid → orientation → optional label
+    log_bottom_sheet.dart          # Log flow: mode grid → orientation → duration presets → optional label
     whisper.dart                   # Reflection text based on today's entries
     weekly_whisper.dart            # Single-line weekly reflection (first-match rule)
     weekly_insights_widget.dart    # Multi-insight cards (mode balance, rhythm, streaks, arcs)
@@ -54,7 +64,13 @@ lib/
 
 - **Mode:** nourishment, growth, maintenance, drift
 - **Orientation:** self, mutual, other
+- **Duration:** optional, mode-specific presets for capturing "feel" of time
+  - Nourishment: moment, stretch, immersive
+  - Growth: focused, deep, extended
+  - Maintenance: quick, routine, heavy
+  - Drift: brief, lost, spiral
 - **LogEntry:** ephemeral — immediately serialized to Markdown, never stored as objects
+- **FileService:** singleton with `@visibleForTesting resetInstance()` for test isolation
 - Flutter's `Orientation` conflicts with ours, so the enum is named `LogOrientation`
 
 ## Markdown Entry Format
@@ -63,8 +79,11 @@ lib/
 - **Reading**
   mode:: growth
   orientation:: self
+  duration:: deep
   at:: 10:32
 ```
+
+Duration is optional and omitted if the user skips the duration step.
 
 ## Design Constraints
 
@@ -74,9 +93,65 @@ lib/
 - Drift visually equal to other modes (no stigma)
 - No productivity language
 - Minimum 48dp tap targets
-- No save button — auto-saves on mode + orientation selection; reflections auto-save with 1s debounce
 - Weekly visualizations use color/proportion only — no numbers, percentages, or scores
 - Insights are observational, never prescriptive ("Thursday was the fullest day", not "great job Thursday")
+
+## Claude API Integration
+
+Optional user-configurable Claude API integration accessed via "AI & Integrations" section in Settings.
+
+**ClaudeService** (`lib/services/claude_service.dart`):
+- Singleton with `@visibleForTesting resetInstance()` for test isolation
+- Uses `flutter_secure_storage` for API key (iOS Keychain, Android EncryptedSharedPreferences)
+- Key format validation: `^sk-ant-api03-[A-Za-z0-9_-]{40,}$`
+- Masked key display: `sk-ant-...XXXX` (last 4 chars)
+- Integration toggle stored in SharedPreferences (`claude_integration_enabled`)
+- Model selection and daily token cap preferences
+
+**Settings UI states:**
+| State | Toggle | Behaviour |
+|-------|--------|-----------|
+| No key saved | OFF (greyed) | Prompt: "Enter an API key below to enable." |
+| Key saved, off | OFF (active) | Shows masked key |
+| Key saved, on | ON | Integration active |
+
+**ClaudeApiClient** (`lib/services/claude_api_client.dart`):
+- Singleton with `@visibleForTesting resetInstance()` for test isolation
+- Uses `dio` package with base URL `https://api.anthropic.com`
+- Required headers: `x-api-key`, `anthropic-version: 2023-06-01`, `content-type: application/json`
+- Timeouts: connect 10s, receive 60s
+- Retry: 3 attempts with exponential back-off + jitter for 429, 500, 502, 503, 504
+- `validateApiKey(key)` — sends minimal request (haiku, max_tokens: 1) to verify key
+- `sendMessage()` — sends user message, returns response text and token usage
+
+**Error mapping:**
+| HTTP | ClaudeApiError | User Message |
+|------|----------------|--------------|
+| 401 | keyInvalid | "Your API key is invalid or has been revoked..." |
+| 429 | rateLimited | "You've reached the API usage limit..." |
+| 5xx | serverError | "Something went wrong on Anthropic's side..." |
+| timeout | timeout | "The request took too long..." |
+| offline | networkOffline | "No internet connection..." |
+| — | dailyCapReached | "You've reached your daily token limit..." |
+| — | integrationPaused | "Claude integration is paused..." |
+
+**ClaudeUsageService** (`lib/services/claude_usage_service.dart`):
+- Tracks input + output tokens per API call
+- Stores cumulative daily usage in SharedPreferences
+- Resets at UTC midnight
+- Configurable daily cap with warning at 90%, pause at 100%
+- `formatTokens()` — displays "12.5K" or "1.2M"
+
+**Settings UI additions:**
+- Model selector dropdown (Haiku, Sonnet, Opus)
+- Usage display ("Today: ~12.5K tokens")
+- Daily limit setting (tap to edit, in thousands of tokens)
+
+**Security:**
+- Key never logged or displayed after initial entry
+- Log redaction interceptor masks API keys in all log output
+- Clipboard cleared after paste into key field
+- Key stored with platform-native hardware-backed encryption where available
 
 ## Weekly Review
 
@@ -107,7 +182,13 @@ The daily reflection screen (accessed via edit icon in home AppBar, or evening w
 
 **Mode icons:** `assets/icons/` contains `.png` icons for each mode (nourishment, growth, maintenence [sic], drift) and orientation (self, mutual, other), used in the log bottom sheet and daily reflection entry cards.
 
-## Testing with Synthetic Data
+## Testing
+
+Always add tests when implementing new functionality. Widget tests go in `test/screens/`, service
+tests in `test/services/`, and logic tests in `test/logic/`. Run `flutter test` to verify all
+tests pass before considering work complete.
+
+### Synthetic Data
 
 In debug mode, Settings has a "Generate test week" button that creates 7 days of varied entries
 (Mon–Sun) with different mode/orientation distributions and times. Use this to test the weekly

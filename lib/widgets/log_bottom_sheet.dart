@@ -15,6 +15,7 @@ class LogBottomSheet extends StatefulWidget {
 class _LogBottomSheetState extends State<LogBottomSheet> {
   Mode? _selectedMode;
   LogOrientation? _selectedOrientation;
+  DurationPreset? _selectedDuration;
   String? _label;
   List<String> _recentLabels = [];
   bool _showLabel = false;
@@ -63,6 +64,7 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
       label: _label,
       mode: _selectedMode!,
       orientation: _selectedOrientation!,
+      duration: _selectedDuration,
       timestamp: DateTime.now(),
     );
 
@@ -81,6 +83,8 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
     HapticFeedback.lightImpact();
     setState(() {
       _selectedMode = mode;
+      // Clear duration if mode changes (spec: previously selected duration is cleared)
+      _selectedDuration = null;
     });
   }
 
@@ -88,13 +92,22 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
     HapticFeedback.lightImpact();
     setState(() {
       _selectedOrientation = orientation;
+      // Now proceed to duration selection (duration is optional, shown before label)
+    });
+  }
+
+  void _selectDuration(DurationPreset? duration) {
+    HapticFeedback.lightImpact();
+    setState(() {
+      _selectedDuration = duration;
       _showLabel = true;
     });
-    // Auto-save after a brief moment to allow optional label
-    Future.delayed(const Duration(milliseconds: 800), () {
-      if (mounted && _selectedMode != null && _selectedOrientation != null && !_showLabel) {
-        _saveEntry();
-      }
+  }
+
+  void _skipDuration() {
+    setState(() {
+      _selectedDuration = null;
+      _showLabel = true;
     });
   }
 
@@ -149,6 +162,27 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
               _buildOrientationSelector(),
             ],
 
+            // Duration selection (optional)
+            if (_selectedMode != null &&
+                _selectedOrientation != null &&
+                !_showLabel) ...[
+              _buildSelectedModeBadge(),
+              const SizedBox(height: 8),
+              _buildSelectedOrientationBadge(),
+              const SizedBox(height: 24),
+              Text(
+                'How long?',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildDurationSelector(),
+              const SizedBox(height: 16),
+              _buildSkipDurationButton(),
+            ],
+
             // Optional label
             if (_selectedMode != null &&
                 _selectedOrientation != null &&
@@ -156,6 +190,10 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
               _buildSelectedModeBadge(),
               const SizedBox(height: 8),
               _buildSelectedOrientationBadge(),
+              if (_selectedDuration != null) ...[
+                const SizedBox(height: 8),
+                _buildSelectedDurationBadge(),
+              ],
               const SizedBox(height: 24),
               _buildLabelInput(),
               const SizedBox(height: 16),
@@ -321,6 +359,84 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
     );
   }
 
+  Widget _buildDurationSelector() {
+    final presets = _selectedMode!.durationPresets;
+    final modeColor = _modeColors[_selectedMode!]!;
+    return Row(
+      children: presets.map((preset) {
+        final isSelected = _selectedDuration == preset;
+        return Expanded(
+          child: GestureDetector(
+            onTap: () => _selectDuration(preset),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? modeColor.withValues(alpha: 0.2)
+                    : Colors.white.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isSelected
+                      ? modeColor.withValues(alpha: 0.4)
+                      : Colors.white.withValues(alpha: 0.1),
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  preset.label,
+                  style: TextStyle(
+                    color: isSelected
+                        ? modeColor
+                        : Colors.white.withValues(alpha: 0.6),
+                    fontSize: 13,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildSkipDurationButton() {
+    return GestureDetector(
+      onTap: _skipDuration,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text(
+          'Skip',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.4),
+            fontSize: 14,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectedDurationBadge() {
+    final d = _selectedDuration!;
+    final modeColor = _modeColors[_selectedMode!]!;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: modeColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        d.label,
+        style: TextStyle(
+          color: modeColor.withValues(alpha: 0.8),
+          fontSize: 13,
+        ),
+      ),
+    );
+  }
+
   Widget _buildLabelInput() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -340,7 +456,7 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           ),
-          onChanged: (v) => _label = v,
+          onChanged: (v) => setState(() => _label = v),
         ),
         if (_recentLabels.isNotEmpty) ...[
           const SizedBox(height: 12),
