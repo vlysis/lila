@@ -1,0 +1,105 @@
+1. Core Principle for Mobile
+Logging should feel like naming an experience, not filling a form.
+So:
+no keyboards by default
+no durations unless asked
+no stacked menus
+Mode + Orientation chosen in one gesture each
+
+2. The Atomic Interaction: “Log a Moment”
+Entry point
+Floating “+” button
+Or long-press from lock screen (later)
+Tap → Log Sheet slides up (bottom sheet, not full screen)
+
+
+
+
+3. Step 1: Choose Mode (primary, first)
+Mode is the meaning of the activity, so it comes first.
+Visual design
+Four large, calm buttons
+Icon + word
+Muted, earthy colors (no gamification energy)
+Layout (2×2 grid):
+
+[ 🌱 Nourishment ]   [ 🌿 Growth ]
+[ 🔧 Maintenance ]  [ 🌫 Drift ]
+Interaction:
+Single tap selects
+Selection animates gently (expand / glow)
+Haptic tick (subtle)
+Time so far: ~300ms
+
+4. Step 2: Choose Orientation (secondary, lighter)
+Once a Mode is tapped, Orientation appears immediately underneath.
+
+
+Orientation selector
+A 3-way segmented control:
+
+[ Self ]   [ Mutual ]   [ Other ]
+Design notes:
+Neutral colors
+No icons initially (words matter here)
+Default can be last-used (but always visible)
+Tap once → done.
+Time so far: ~600ms total
+
+5. Optional Layer: Name the Activity (optional, skippable)
+Only now does text appear—and it’s optional.
+Placeholder: “What was it?”
+Voice input encouraged
+Or tap a recent activity chip
+Recent chips example:
+
+[ Walk ] [ Email ] [ Reading ] [ Scrolling ]
+If the user does nothing here → still logged.
+This keeps honesty > completeness.
+
+6. Duration: Never First, Sometimes Later
+Default duration behavior:
+Implicit (Lila estimates later)
+Or last-used duration per activity
+Or quick presets if tapped
+If shown at all:
+
+[ Short ] [ Medium ] [ Long ]
+Not minutes. Never minutes by default.
+
+7. The Entire Flow (compressed)
+Tap + → Tap Mode → Tap Orientation → (Optionally name it) → Auto-save & dismiss
+No “Save” button. No confirmation dialog. Trust the action.
+
+8. Ultra-Fast Variant: “Quick Log”
+For Drift especially, speed matters.
+Long-press + shows:
+A radial menu:
+
+
+Inner ring: ModesOuter ring (appears on hold): Orientations
+Slide → release → logged.
+This is optional, but power users will love it.
+
+9. Gentle Reflection Inline (not blocking)
+After logging, a one-line whisper may appear:
+“Mostly Other-directed so far today.”
+“First Nourishment logged today.”
+“Drift late again—noticed.”
+No actions required. Disappears automatically.
+
+10. How This Maps to Markdown (invisibly)
+Each log becomes a bullet like:
+
+- **Reading**  
+  mode:: growth  
+  orientation:: self
+The user never sees this on mobile—but it’s always there.
+
+11. Accessibility & Emotional Safety
+Important details:
+Large tap targets (thumb-first)
+No red / green success cues
+Drift visually equal to other modes
+Orientation language never framed as “selfish” vs “good”
+This is a confessional interface, not a dashboard.
