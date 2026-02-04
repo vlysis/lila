@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/log_entry.dart';
+import '../theme/lila_theme.dart';
 
 class _Insight {
   final String text;
@@ -18,13 +19,6 @@ class WeeklyInsightsWidget extends StatelessWidget {
     required this.entriesByDay,
   });
 
-  static const _modeColors = {
-    Mode.nourishment: Color(0xFF6B8F71),
-    Mode.growth: Color(0xFF7B9EA8),
-    Mode.maintenance: Color(0xFFA8976B),
-    Mode.drift: Color(0xFF8B7B8B),
-  };
-
   static const _neutralColor = Color(0xFF808080);
 
   static const _dayNames = [
@@ -32,7 +26,8 @@ class WeeklyInsightsWidget extends StatelessWidget {
     'Friday', 'Saturday', 'Sunday',
   ];
 
-  List<_Insight> _generate() {
+  List<_Insight> _generate(BuildContext context) {
+    final palette = context.lilaPalette;
     final insights = <_Insight>[];
     final total = weekEntries.length;
     if (total < 3) return insights;
@@ -54,13 +49,13 @@ class WeeklyInsightsWidget extends StatelessWidget {
       final m2 = sortedModes[1].key.label;
       insights.add(_Insight(
         '$m1 and ${m2.toLowerCase()} were most present.',
-        _modeColors[sortedModes[0].key]!,
+        palette.modeColor(sortedModes[0].key),
       ));
     } else if (sortedModes.isNotEmpty &&
         sortedModes[0].value > total * 0.5) {
       insights.add(_Insight(
         '${sortedModes[0].key.label} carried much of the week.',
-        _modeColors[sortedModes[0].key]!,
+        palette.modeColor(sortedModes[0].key),
       ));
     }
 
@@ -69,7 +64,7 @@ class WeeklyInsightsWidget extends StatelessWidget {
       if ((modeCounts[mode] ?? 0) == 0) {
         insights.add(_Insight(
           '${mode.label} didn\'t appear this week.',
-          _modeColors[mode]!,
+          palette.modeColor(mode),
         ));
       }
     }
@@ -182,7 +177,7 @@ class WeeklyInsightsWidget extends StatelessWidget {
       if (topFirst != topSecond) {
         insights.add(_Insight(
           'The week started ${topFirst.label}-directed and shifted toward ${topSecond.label}.',
-          const Color(0xFF9B8EC4),
+          palette.selfOrientation,
         ));
       }
     }
@@ -205,8 +200,10 @@ class WeeklyInsightsWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final insights = _generate();
+    final insights = _generate(context);
     if (insights.isEmpty) return const SizedBox.shrink();
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final radii = context.lilaRadii;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -214,7 +211,7 @@ class WeeklyInsightsWidget extends StatelessWidget {
         Text(
           'INSIGHTS',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.25),
+            color: onSurface.withValues(alpha: 0.25),
             fontSize: 11,
             letterSpacing: 1.2,
             fontWeight: FontWeight.w600,
@@ -225,8 +222,8 @@ class WeeklyInsightsWidget extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 8),
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.04),
-                  borderRadius: BorderRadius.circular(10),
+                  color: onSurface.withValues(alpha: 0.04),
+                  borderRadius: BorderRadius.circular(radii.small),
                   border: Border(
                     left: BorderSide(
                       color: insight.color.withValues(alpha: 0.5),
@@ -239,7 +236,7 @@ class WeeklyInsightsWidget extends StatelessWidget {
                 child: Text(
                   insight.text,
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
+                    color: onSurface.withValues(alpha: 0.6),
                     fontSize: 14,
                     height: 1.4,
                   ),

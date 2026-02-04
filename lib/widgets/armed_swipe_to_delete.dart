@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../theme/lila_theme.dart';
 
 class ArmedSwipeToDelete extends StatefulWidget {
   final Key dismissKey;
@@ -109,6 +110,7 @@ class _ArmedSwipeToDeleteState extends State<ArmedSwipeToDelete>
 
   @override
   Widget build(BuildContext context) {
+    final radii = context.lilaRadii;
     final child = AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
@@ -116,7 +118,7 @@ class _ArmedSwipeToDeleteState extends State<ArmedSwipeToDelete>
         color: _revealed
             ? Colors.white.withValues(alpha: 0.03)
             : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(radii.medium),
         border: Border.all(
           color: _revealed
               ? const Color(0xFFA87B6B).withValues(alpha: 0.35)
@@ -148,7 +150,7 @@ class _ArmedSwipeToDeleteState extends State<ArmedSwipeToDelete>
             onHorizontalDragEnd: _handleDragEnd,
             behavior: HitTestBehavior.translucent,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(radii.medium),
               child: Stack(
                 alignment: Alignment.centerRight,
                 children: [
@@ -177,18 +179,18 @@ class _ArmedSwipeToDeleteState extends State<ArmedSwipeToDelete>
                         onTap: _handleDelete,
                         child: SizedBox(
                           key: _deletePillKey,
-                          child: Container(
-                            key: const ValueKey('armed_delete_pill'),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFA87B6B)
-                                  .withValues(alpha: 0.18),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: const Color(0xFFA87B6B)
-                                    .withValues(alpha: 0.5),
-                              ),
+                      child: Container(
+                        key: const ValueKey('armed_delete_pill'),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFA87B6B)
+                              .withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(radii.small),
+                          border: Border.all(
+                            color: const Color(0xFFA87B6B)
+                                .withValues(alpha: 0.5),
+                          ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -223,10 +225,11 @@ class _ArmedSwipeToDeleteState extends State<ArmedSwipeToDelete>
   }
 
   Widget _buildDeleteBackground(BuildContext context) {
+    final radii = context.lilaRadii;
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFFA87B6B).withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(radii.medium),
       ),
     );
   }

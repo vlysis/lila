@@ -1,18 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/log_entry.dart';
+import '../theme/lila_theme.dart';
 
 class WeeklyWhisperWidget extends StatelessWidget {
   final List<LogEntry> weekEntries;
   final Map<int, List<LogEntry>> entriesByDay;
+  final String? whisperOverride;
 
   const WeeklyWhisperWidget({
     super.key,
     required this.weekEntries,
     required this.entriesByDay,
+    this.whisperOverride,
   });
 
-  String? _generateWhisper() {
+  static String? generateWhisper(
+    List<LogEntry> weekEntries,
+    Map<int, List<LogEntry>> entriesByDay,
+  ) {
     final total = weekEntries.length;
 
     if (total < 2) return null;
@@ -96,17 +102,23 @@ class WeeklyWhisperWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final whisper = _generateWhisper();
+    final whisper =
+        whisperOverride ?? generateWhisper(weekEntries, entriesByDay);
     if (whisper == null) return const SizedBox.shrink();
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final radii = context.lilaRadii;
+    final isSanctuary = radii.large >= 24;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Text(
         whisper,
         style: TextStyle(
-          color: Colors.white.withValues(alpha: 0.5),
+          color: onSurface.withValues(alpha: isSanctuary ? 0.6 : 0.5),
           fontSize: 14,
           fontStyle: FontStyle.italic,
+          fontWeight: isSanctuary ? FontWeight.w300 : FontWeight.w400,
+          letterSpacing: isSanctuary ? 0.3 : 0,
         ),
       ),
     );

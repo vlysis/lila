@@ -63,6 +63,7 @@ void main() {
       expect(Directory('$defaultVault/Activities').existsSync(), isTrue);
       expect(Directory('$defaultVault/Weekly').existsSync(), isTrue);
       expect(Directory('$defaultVault/Meta').existsSync(), isTrue);
+      expect(Directory('$defaultVault/Trash').existsSync(), isTrue);
     });
 
     test('creates modes.md at default path', () async {
@@ -91,6 +92,7 @@ void main() {
       expect(Directory('$customPath/Daily').existsSync(), isTrue);
       expect(Directory('$customPath/Weekly').existsSync(), isTrue);
       expect(Directory('$customPath/Meta').existsSync(), isTrue);
+      expect(Directory('$customPath/Trash').existsSync(), isTrue);
     });
 
     test('falls back to default when custom path has no write access', () async {
@@ -127,6 +129,7 @@ void main() {
       expect(Directory('$newPath/Activities').existsSync(), isTrue);
       expect(Directory('$newPath/Weekly').existsSync(), isTrue);
       expect(Directory('$newPath/Meta').existsSync(), isTrue);
+      expect(Directory('$newPath/Trash').existsSync(), isTrue);
     });
 
     test('setVaultPath persists custom path', () async {

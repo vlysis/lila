@@ -9,6 +9,7 @@ import '../widgets/orientation_threads_widget.dart';
 import '../widgets/daily_rhythm_widget.dart';
 import '../widgets/weekly_whisper.dart';
 import '../widgets/weekly_insights_widget.dart';
+import '../theme/lila_theme.dart';
 
 class WeeklyReviewScreen extends StatefulWidget {
   final DateTime weekStart;
@@ -85,22 +86,27 @@ class _WeeklyReviewScreenState extends State<WeeklyReviewScreen> {
     final weekEnd = widget.weekStart.add(const Duration(days: 6));
     final fromStr = DateFormat('MMM d').format(widget.weekStart);
     final toStr = DateFormat('MMM d').format(weekEnd);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final onSurface = colorScheme.onSurface;
+    final whisperText =
+        WeeklyWhisperWidget.generateWhisper(_allEntries, _entriesByDay);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back,
-              color: Colors.white.withValues(alpha: 0.7)),
+              color: onSurface.withValues(alpha: 0.7)),
           onPressed: () => Navigator.pop(context),
         ),
       ),
       body: _loading
-          ? const Center(
+          ? Center(
               child: CircularProgressIndicator(
-                color: Color(0xFF7B9EA8),
+                color: colorScheme.primary,
                 strokeWidth: 2,
               ),
             )
@@ -114,7 +120,7 @@ class _WeeklyReviewScreenState extends State<WeeklyReviewScreen> {
                     Text(
                       'This Week',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.9),
+                        color: onSurface.withValues(alpha: 0.9),
                         fontSize: 32,
                         fontWeight: FontWeight.w300,
                       ),
@@ -123,37 +129,60 @@ class _WeeklyReviewScreenState extends State<WeeklyReviewScreen> {
                     Text(
                       '$fromStr – $toStr',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.35),
+                        color: onSurface.withValues(alpha: 0.35),
                         fontSize: 15,
                       ),
                     ),
                     const SizedBox(height: 16),
-                    WeeklyWhisperWidget(
-                      weekEntries: _allEntries,
-                      entriesByDay: _entriesByDay,
-                    ),
+                    if (whisperText != null) ...[
+                      _sectionCard(
+                        WeeklyWhisperWidget(
+                          weekEntries: _allEntries,
+                          entriesByDay: _entriesByDay,
+                          whisperOverride: whisperText,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 32),
-                    WeekTextureWidget(entriesByDay: _entriesByDay),
+                    _sectionCard(
+                      WeekTextureWidget(entriesByDay: _entriesByDay),
+                    ),
                     const SizedBox(height: 36),
-                    OrientationThreadsWidget(weekEntries: _allEntries),
-                    const SizedBox(height: 36),
-                    DailyRhythmWidget(entriesByDay: _entriesByDay),
+                    if (_allEntries.isNotEmpty) ...[
+                      _sectionCard(
+                        OrientationThreadsWidget(weekEntries: _allEntries),
+                      ),
+                      const SizedBox(height: 36),
+                      _sectionCard(
+                        DailyRhythmWidget(entriesByDay: _entriesByDay),
+                      ),
+                    ] else ...[
+                      _sectionCard(
+                        DailyRhythmWidget(entriesByDay: _entriesByDay),
+                      ),
+                    ],
                     if (_allEntries.isNotEmpty) ...[
                       const SizedBox(height: 36),
-                      WeeklyInsightsWidget(
-                        weekEntries: _allEntries,
-                        entriesByDay: _entriesByDay,
+                      _sectionCard(
+                        WeeklyInsightsWidget(
+                          weekEntries: _allEntries,
+                          entriesByDay: _entriesByDay,
+                        ),
                       ),
                     ],
                     const SizedBox(height: 36),
-                    _buildReflectionSection(),
+                    _sectionCard(_buildReflectionSection()),
                     if (_allEntries.isEmpty) ...[
                       const SizedBox(height: 48),
                       Center(
                         child: Text(
                           'No moments logged this week.',
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.3),
+                            color: onSurface.withValues(alpha: 0.3),
                             fontSize: 15,
                           ),
                         ),
@@ -167,13 +196,18 @@ class _WeeklyReviewScreenState extends State<WeeklyReviewScreen> {
   }
 
   Widget _buildReflectionSection() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final onSurface = colorScheme.onSurface;
+    final radii = context.lilaRadii;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'REFLECTION',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.25),
+            color: onSurface.withValues(alpha: 0.25),
             fontSize: 11,
             letterSpacing: 1.2,
             fontWeight: FontWeight.w600,
@@ -186,26 +220,48 @@ class _WeeklyReviewScreenState extends State<WeeklyReviewScreen> {
           maxLines: null,
           minLines: 4,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.8),
+            color: onSurface.withValues(alpha: 0.8),
             fontSize: 15,
             height: 1.6,
           ),
           decoration: InputDecoration(
             hintText: 'How did this week feel?',
             hintStyle: TextStyle(
-              color: Colors.white.withValues(alpha: 0.2),
+              color: onSurface.withValues(alpha: 0.3),
               fontStyle: FontStyle.italic,
             ),
             filled: true,
-            fillColor: Colors.white.withValues(alpha: 0.04),
+            fillColor:
+                colorScheme.surfaceVariant.withValues(alpha: 0.6),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(radii.medium),
               borderSide: BorderSide.none,
             ),
             contentPadding: const EdgeInsets.all(16),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _sectionCard(
+    Widget child, {
+    EdgeInsetsGeometry padding = const EdgeInsets.all(16),
+  }) {
+    final theme = Theme.of(context);
+    final radii = context.lilaRadii;
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceVariant.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(radii.medium),
+        border: Border.all(
+          color: colorScheme.outline.withValues(alpha: 0.3),
+        ),
+      ),
+      child: child,
     );
   }
 }

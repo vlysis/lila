@@ -515,19 +515,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.white.withValues(alpha: 0.7)),
+          icon: Icon(Icons.arrow_back, color: onSurface.withValues(alpha: 0.7)),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           'Settings',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.7),
+            color: onSurface.withValues(alpha: 0.7),
             fontSize: 16,
             fontWeight: FontWeight.w400,
           ),

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lila/models/log_entry.dart';
+import 'package:lila/models/focus_state.dart';
 
 void main() {
   group('Mode', () {
@@ -127,6 +128,18 @@ void main() {
       final md = entry.toMarkdown();
       expect(md, isNot(contains('duration::')));
     });
+
+    test('includes season when provided', () {
+      final entry = LogEntry(
+        label: 'Build',
+        mode: Mode.growth,
+        orientation: LogOrientation.self_,
+        season: FocusSeason.builder,
+        timestamp: DateTime(2026, 2, 2, 10, 32),
+      );
+      final md = entry.toMarkdown();
+      expect(md, contains('season:: builder'));
+    });
   });
 
   group('LogEntry.fromMarkdown', () {
@@ -166,6 +179,18 @@ void main() {
       final entry = LogEntry.fromMarkdown(block);
       expect(entry, isNotNull);
       expect(entry!.duration, isNull);
+    });
+
+    test('parses entry with season', () {
+      const block = '''- **Reset**
+  mode:: nourishment
+  orientation:: mutual
+  season:: sanctuary
+  at:: 09:15''';
+
+      final entry = LogEntry.fromMarkdown(block);
+      expect(entry, isNotNull);
+      expect(entry!.season, FocusSeason.sanctuary);
     });
 
     test('parses all duration preset types', () {
@@ -284,6 +309,22 @@ void main() {
 
       expect(parsed, isNotNull);
       expect(parsed!.duration, DurationPreset.extended);
+    });
+
+    test('toMarkdown then fromMarkdown preserves season', () {
+      final original = LogEntry(
+        label: 'Boundary',
+        mode: Mode.nourishment,
+        orientation: LogOrientation.other,
+        season: FocusSeason.sanctuary,
+        timestamp: DateTime(2026, 2, 2, 12, 0),
+      );
+
+      final md = original.toMarkdown();
+      final parsed = LogEntry.fromMarkdown(md);
+
+      expect(parsed, isNotNull);
+      expect(parsed!.season, FocusSeason.sanctuary);
     });
 
     test('roundtrip works for all mode+orientation combos', () {

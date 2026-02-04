@@ -4,6 +4,17 @@ import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/log_entry.dart';
+import '../models/trashed_entry.dart';
+
+class _SectionRemoval {
+  final String updatedContent;
+  final String removedBlock;
+
+  const _SectionRemoval({
+    required this.updatedContent,
+    required this.removedBlock,
+  });
+}
 
 class FileService {
   static const _vaultPathKey = 'custom_vault_path';
@@ -71,7 +82,7 @@ class FileService {
   String get rootDir => _rootDir;
 
   Future<void> _ensureDirectories() async {
-    final dirs = ['Daily', 'Activities', 'Weekly', 'Meta'];
+    final dirs = ['Daily', 'Activities', 'Weekly', 'Meta', 'Trash'];
     for (final dir in dirs) {
       await Directory('$_rootDir/$dir').create(recursive: true);
     }
@@ -87,6 +98,21 @@ class FileService {
   String _dailyFilePath(DateTime date) {
     final formatted = DateFormat('yyyy-MM-dd').format(date);
     return '$_rootDir/Daily/$formatted.md';
+  }
+
+  String _trashFilePath(DateTime date) {
+    final formatted = DateFormat('yyyy-MM-dd').format(date);
+    return '$_rootDir/Trash/$formatted.md';
+  }
+
+  Future<void> _ensureTrashFile(String path, DateTime date) async {
+    final file = File(path);
+    if (!await file.exists()) {
+      final formatted = DateFormat('yyyy-MM-dd').format(date);
+      await file.writeAsString(
+        '---\ndate: $formatted\ntype: trash\n---\n\n## Deleted\n',
+      );
+    }
   }
 
   Future<void> _ensureDailyFile(String path, DateTime date) async {
@@ -118,6 +144,26 @@ class FileService {
     }
   }
 
+  LogEntry _applyDate(LogEntry entry, DateTime date) {
+    return LogEntry(
+      label: entry.label,
+      mode: entry.mode,
+      orientation: entry.orientation,
+      duration: entry.duration,
+      season: entry.season,
+      timestamp: DateTime(
+        date.year,
+        date.month,
+        date.day,
+        entry.timestamp.hour,
+        entry.timestamp.minute,
+        entry.timestamp.second,
+        entry.timestamp.millisecond,
+        entry.timestamp.microsecond,
+      ),
+    );
+  }
+
   Future<List<LogEntry>> readDailyEntries(DateTime date) async {
     final path = _dailyFilePath(date);
     final file = File(path);
@@ -132,18 +178,7 @@ class FileService {
       final entry = LogEntry.fromMarkdown(block);
       if (entry != null) {
         // Reconstruct with correct date
-        entries.add(LogEntry(
-          label: entry.label,
-          mode: entry.mode,
-          orientation: entry.orientation,
-          timestamp: DateTime(
-            date.year,
-            date.month,
-            date.day,
-            entry.timestamp.hour,
-            entry.timestamp.minute,
-          ),
-        ));
+        entries.add(_applyDate(entry, date));
       }
     }
     return entries;
@@ -155,41 +190,245 @@ class FileService {
     if (!await file.exists()) return false;
 
     final content = await file.readAsString();
-    final entriesHeaderIndex = content.indexOf('## Entries');
-    if (entriesHeaderIndex == -1) return false;
+    final removal = _removeEntryFromSection(
+      content: content,
+      sectionHeader: '## Entries',
+      shouldRemove: (parsed, _) => _matchesEntry(entry, parsed),
+    );
+    if (removal == null) return false;
+    await file.writeAsString(removal.updatedContent);
+    return true;
+  }
 
-    final headerLineEnd = content.indexOf('\n', entriesHeaderIndex);
-    if (headerLineEnd == -1) return false;
+  _SectionRemoval? _removeEntryFromSection({
+    required String content,
+    required String sectionHeader,
+    required bool Function(LogEntry parsed, String block) shouldRemove,
+  }) {
+    final headerIndex = content.indexOf(sectionHeader);
+    if (headerIndex == -1) return null;
 
-    final entriesStart = headerLineEnd + 1;
-    final afterEntries = content.substring(entriesStart);
-    final nextSectionMatch = RegExp(r'\n## ').firstMatch(afterEntries);
-    final entriesEnd = nextSectionMatch != null
-        ? entriesStart + nextSectionMatch.start
+    final headerLineEnd = content.indexOf('\n', headerIndex);
+    if (headerLineEnd == -1) return null;
+
+    final sectionStart = headerLineEnd + 1;
+    final afterSection = content.substring(sectionStart);
+    final nextSectionMatch = RegExp(r'\n## ').firstMatch(afterSection);
+    final sectionEnd = nextSectionMatch != null
+        ? sectionStart + nextSectionMatch.start
         : content.length;
 
-    final entriesSection = content.substring(entriesStart, entriesEnd);
-    final blocks = entriesSection.split(RegExp(r'\n(?=- \*\*)'));
+    final section = content.substring(sectionStart, sectionEnd);
+    final blocks = section.split(RegExp(r'\n(?=- \*\*)'));
+    var removedBlock = '';
     var removed = false;
     final keptBlocks = <String>[];
 
     for (final block in blocks) {
       final parsed = LogEntry.fromMarkdown(block);
-      if (!removed && parsed != null && _matchesEntry(entry, parsed)) {
+      if (!removed && parsed != null && shouldRemove(parsed, block)) {
         removed = true;
+        removedBlock = block;
         continue;
       }
       keptBlocks.add(block);
     }
 
-    if (removed) {
-      final updated =
-          content.substring(0, entriesStart) +
-          keptBlocks.join('\n') +
-          content.substring(entriesEnd);
-      await file.writeAsString(updated);
+    if (!removed) return null;
+    final updated =
+        content.substring(0, sectionStart) +
+        keptBlocks.join('\n') +
+        content.substring(sectionEnd);
+    return _SectionRemoval(updatedContent: updated, removedBlock: removedBlock);
+  }
+
+  String _withTrashMetadata({
+    required String block,
+    required DateTime deletedAt,
+    required DateTime sourceDate,
+  }) {
+    final buffer = StringBuffer();
+    buffer.writeln(block.trimRight());
+    buffer.writeln('  deleted_at:: ${deletedAt.toIso8601String()}');
+    buffer.writeln(
+      '  source_date:: ${DateFormat('yyyy-MM-dd').format(sourceDate)}',
+    );
+    return buffer.toString().trimRight();
+  }
+
+  DateTime? _parseDeletedAt(String block) {
+    final match = RegExp(r'deleted_at:: ([^\n]+)').firstMatch(block);
+    if (match == null) return null;
+    return DateTime.tryParse(match.group(1)!.trim());
+  }
+
+  DateTime? _parseSourceDate(String block) {
+    final match = RegExp(r'source_date:: ([^\n]+)').firstMatch(block);
+    if (match == null) return null;
+    final value = match.group(1)!.trim();
+    try {
+      return DateFormat('yyyy-MM-dd').parseStrict(value);
+    } catch (_) {
+      return null;
     }
-    return removed;
+  }
+
+  bool _matchesTrashEntry(
+    LogEntry target,
+    LogEntry parsed,
+    DateTime? targetDeletedAt,
+    DateTime? blockDeletedAt,
+  ) {
+    if (targetDeletedAt != null && blockDeletedAt != null) {
+      if (!blockDeletedAt.isAtSameMomentAs(targetDeletedAt)) {
+        return false;
+      }
+    }
+    return _matchesEntry(target, parsed);
+  }
+
+  Future<bool> moveEntryToTrash(LogEntry entry) async {
+    final path = _dailyFilePath(entry.timestamp);
+    final file = File(path);
+    if (!await file.exists()) return false;
+
+    final content = await file.readAsString();
+    final removal = _removeEntryFromSection(
+      content: content,
+      sectionHeader: '## Entries',
+      shouldRemove: (parsed, _) => _matchesEntry(entry, parsed),
+    );
+    if (removal == null) return false;
+
+    await file.writeAsString(removal.updatedContent);
+
+    final deletedAt = DateTime.now();
+    final trashBlock = _withTrashMetadata(
+      block: removal.removedBlock,
+      deletedAt: deletedAt,
+      sourceDate: entry.timestamp,
+    );
+    final trashPath = _trashFilePath(entry.timestamp);
+    await _ensureTrashFile(trashPath, entry.timestamp);
+    await File(trashPath).writeAsString(
+      '\n$trashBlock',
+      mode: FileMode.append,
+    );
+    return true;
+  }
+
+  Future<List<TrashedEntry>> readTrashEntriesForDate(DateTime date) async {
+    final path = _trashFilePath(date);
+    final file = File(path);
+    if (!await file.exists()) return [];
+
+    final content = await file.readAsString();
+    final headerIndex = content.indexOf('## Deleted');
+    if (headerIndex == -1) return [];
+
+    final headerLineEnd = content.indexOf('\n', headerIndex);
+    if (headerLineEnd == -1) return [];
+
+    final sectionStart = headerLineEnd + 1;
+    final afterSection = content.substring(sectionStart);
+    final nextSectionMatch = RegExp(r'\n## ').firstMatch(afterSection);
+    final sectionEnd = nextSectionMatch != null
+        ? sectionStart + nextSectionMatch.start
+        : content.length;
+
+    final section = content.substring(sectionStart, sectionEnd);
+    final blocks = section.split(RegExp(r'\n(?=- \*\*)'));
+    final entries = <TrashedEntry>[];
+
+    for (final block in blocks) {
+      final parsed = LogEntry.fromMarkdown(block);
+      if (parsed == null) continue;
+      final sourceDate = _parseSourceDate(block) ?? date;
+      final entryWithDate = _applyDate(parsed, sourceDate);
+      final deletedAt = _parseDeletedAt(block);
+      entries.add(
+        TrashedEntry(
+          entry: entryWithDate,
+          sourceDate: sourceDate,
+          deletedAt: deletedAt,
+        ),
+      );
+    }
+    return entries;
+  }
+
+  Future<Map<DateTime, List<TrashedEntry>>> readAllTrashEntries() async {
+    final dir = Directory('$_rootDir/Trash');
+    if (!await dir.exists()) return {};
+
+    final results = <DateTime, List<TrashedEntry>>{};
+    final files = await dir
+        .list()
+        .where((entity) => entity is File && entity.path.endsWith('.md'))
+        .cast<File>()
+        .toList();
+
+    for (final file in files) {
+      final name = file.uri.pathSegments.last;
+      if (!name.endsWith('.md')) continue;
+      final dateString = name.replaceAll('.md', '');
+      DateTime? parsedDate;
+      try {
+        parsedDate = DateFormat('yyyy-MM-dd').parseStrict(dateString);
+      } catch (_) {
+        parsedDate = null;
+      }
+      if (parsedDate == null) continue;
+      final entries = await readTrashEntriesForDate(parsedDate);
+      if (entries.isNotEmpty) {
+        results[parsedDate] = entries;
+      }
+    }
+    return results;
+  }
+
+  Future<bool> restoreEntry(TrashedEntry trashed) async {
+    final trashPath = _trashFilePath(trashed.sourceDate);
+    final file = File(trashPath);
+    if (!await file.exists()) return false;
+
+    final content = await file.readAsString();
+    final removal = _removeEntryFromSection(
+      content: content,
+      sectionHeader: '## Deleted',
+      shouldRemove: (parsed, block) => _matchesTrashEntry(
+        trashed.entry,
+        parsed,
+        trashed.deletedAt,
+        _parseDeletedAt(block),
+      ),
+    );
+    if (removal == null) return false;
+
+    await appendEntry(trashed.entry);
+    await file.writeAsString(removal.updatedContent);
+    return true;
+  }
+
+  Future<bool> deleteTrashedEntry(TrashedEntry trashed) async {
+    final trashPath = _trashFilePath(trashed.sourceDate);
+    final file = File(trashPath);
+    if (!await file.exists()) return false;
+
+    final content = await file.readAsString();
+    final removal = _removeEntryFromSection(
+      content: content,
+      sectionHeader: '## Deleted',
+      shouldRemove: (parsed, block) => _matchesTrashEntry(
+        trashed.entry,
+        parsed,
+        trashed.deletedAt,
+        _parseDeletedAt(block),
+      ),
+    );
+    if (removal == null) return false;
+    await file.writeAsString(removal.updatedContent);
+    return true;
   }
 
   bool _matchesEntry(LogEntry target, LogEntry parsed) {
@@ -201,6 +440,7 @@ class FileService {
     if (targetLabel != parsedLabel) return false;
     if (target.mode != parsed.mode) return false;
     if (target.orientation != parsed.orientation) return false;
+    if (target.season != null && target.season != parsed.season) return false;
     if (target.timestamp.hour != parsed.timestamp.hour ||
         target.timestamp.minute != parsed.timestamp.minute) {
       return false;

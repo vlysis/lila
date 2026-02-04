@@ -30,6 +30,7 @@ flutter test               # run tests
   - `Activities/` — reserved for future use
   - `Weekly/YYYY-Www.md` — auto-generated weekly summaries + user reflections
   - `Meta/modes.md` — mode definitions
+  - `Trash/YYYY-MM-DD.md` — soft-deleted moments (permanent unless deleted manually)
 
 ## Project Structure
 
@@ -87,7 +88,7 @@ Duration is optional and omitted if the user skips the duration step.
 
 ## Design Constraints
 
-- Home AppBar buttons use circular containers (36×36, white @ 8% fill, 20px icons)
+- Top AppBar icons are plain (no background ovals); keep tap targets at least 48dp.
 - Dark mode default
 - No red/green success states
 - Drift visually equal to other modes (no stigma)

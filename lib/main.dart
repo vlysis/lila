@@ -2,39 +2,49 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'screens/home_screen.dart';
 import 'services/file_service.dart';
+import 'services/focus_controller.dart';
+import 'theme/lila_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: Color(0xFF121212),
-      systemNavigationBarIconBrightness: Brightness.light,
-    ),
-  );
   await FileService.getInstance();
-  runApp(const LilaApp());
+  final focusController = FocusController();
+  await focusController.load();
+  runApp(LilaApp(focusController: focusController));
 }
 
 class LilaApp extends StatelessWidget {
-  const LilaApp({super.key});
+  final FocusController focusController;
+  final Widget? homeOverride;
+
+  const LilaApp({
+    super.key,
+    required this.focusController,
+    this.homeOverride,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Lila',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF121212),
-        colorScheme: const ColorScheme.dark(
-          surface: Color(0xFF121212),
-          primary: Color(0xFF7B9EA8),
-        ),
-        fontFamily: 'Roboto',
-      ),
-      home: const HomeScreen(),
+    return AnimatedBuilder(
+      animation: focusController,
+      builder: (context, _) {
+        final theme = LilaTheme.forSeason(focusController.state.season);
+        SystemChrome.setSystemUIOverlayStyle(
+          SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.light,
+            systemNavigationBarColor: theme.scaffoldBackgroundColor,
+            systemNavigationBarIconBrightness: Brightness.light,
+          ),
+        );
+
+        return MaterialApp(
+          title: 'Lila',
+          debugShowCheckedModeBanner: false,
+          theme: theme,
+          home: homeOverride ?? HomeScreen(focusController: focusController),
+        );
+      },
     );
   }
 }

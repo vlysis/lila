@@ -48,13 +48,24 @@ void main() {
     tempDir.deleteSync(recursive: true);
   });
 
-  Future<void> pumpSheet(WidgetTester tester) async {
+  Future<void> pumpSheet(
+    WidgetTester tester, {
+    EdgeInsets viewInsets = EdgeInsets.zero,
+  }) async {
     await tester.runAsync(() async {
       await FileService.getInstance();
     });
     await tester.pumpWidget(
       MaterialApp(
+        builder: (context, child) {
+          final data = MediaQuery.of(context).copyWith(viewInsets: viewInsets);
+          return MediaQuery(
+            data: data,
+            child: child ?? const SizedBox.shrink(),
+          );
+        },
         home: Scaffold(
+          resizeToAvoidBottomInset: false,
           body: LogBottomSheet(onLogged: () {}),
         ),
       ),
@@ -162,6 +173,25 @@ void main() {
 
       expect(find.text('Log'), findsOneWidget);
       expect(find.text('Log without label'), findsNothing);
+    });
+
+    testWidgets('moves input above keyboard', (tester) async {
+      await pumpSheet(
+        tester,
+        viewInsets: const EdgeInsets.only(bottom: 280),
+      );
+
+      await tester.tap(find.text('Growth'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Self'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Skip'));
+      await tester.pumpAndSettle();
+
+      final insetPadding = tester.widget<AnimatedPadding>(
+        find.byKey(const ValueKey('log_sheet_inset_padding')),
+      );
+      expect(insetPadding.padding, const EdgeInsets.only(bottom: 280));
     });
   });
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/log_entry.dart';
 import '../services/file_service.dart';
+import '../theme/lila_theme.dart';
 
 class DailyDetailScreen extends StatefulWidget {
   final DateTime date;
@@ -14,13 +15,6 @@ class DailyDetailScreen extends StatefulWidget {
 
 class _DailyDetailScreenState extends State<DailyDetailScreen> {
   List<LogEntry> _entries = [];
-
-  static const _modeColors = {
-    Mode.nourishment: Color(0xFF6B8F71),
-    Mode.growth: Color(0xFF7B9EA8),
-    Mode.maintenance: Color(0xFFA8976B),
-    Mode.drift: Color(0xFF8B7B8B),
-  };
 
   @override
   void initState() {
@@ -37,20 +31,22 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final dateStr = DateFormat('EEEE, MMMM d').format(widget.date);
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.white.withValues(alpha: 0.7)),
+          icon: Icon(Icons.arrow_back, color: onSurface.withValues(alpha: 0.7)),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           dateStr,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.7),
+            color: onSurface.withValues(alpha: 0.7),
             fontSize: 16,
             fontWeight: FontWeight.w400,
           ),
@@ -61,7 +57,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
               child: Text(
                 'No entries yet.',
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.3),
+                  color: onSurface.withValues(alpha: 0.3),
                   fontSize: 15,
                 ),
               ),
@@ -78,9 +74,11 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
   }
 
   Widget _buildEntryCard(LogEntry entry) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final palette = context.lilaPalette;
     final time =
         '${entry.timestamp.hour.toString().padLeft(2, '0')}:${entry.timestamp.minute.toString().padLeft(2, '0')}';
-    final modeColor = _modeColors[entry.mode] ?? Colors.grey;
+    final modeColor = palette.modeColor(entry.mode);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -90,15 +88,15 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
           // Time column
           SizedBox(
             width: 50,
-            child: Text(
-              time,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.25),
-                fontSize: 13,
-                fontFeatures: const [FontFeature.tabularFigures()],
+              child: Text(
+                time,
+                style: TextStyle(
+                  color: onSurface.withValues(alpha: 0.25),
+                  fontSize: 13,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
             ),
-          ),
           const SizedBox(width: 12),
           // Entry content
           Expanded(
@@ -108,7 +106,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                 Text(
                   entry.label ?? entry.mode.label,
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.8),
+                    color: onSurface.withValues(alpha: 0.8),
                     fontSize: 16,
                   ),
                 ),
@@ -132,18 +130,22 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
   }
 
   Widget _buildBadge(String text, Color color) {
+    final radii = context.lilaRadii;
+    final textStyle = Theme.of(context).textTheme.labelSmall ??
+        const TextStyle(fontSize: 11, fontWeight: FontWeight.w500);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(radii.small),
       ),
       child: Text(
         text,
         style: TextStyle(
           color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
+          fontSize: textStyle.fontSize,
+          fontWeight: textStyle.fontWeight,
+          letterSpacing: textStyle.letterSpacing,
         ),
       ),
     );
