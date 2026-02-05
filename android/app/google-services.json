@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "813962697180",
+    "project_id": "lila-25ffe",
+    "storage_bucket": "lila-25ffe.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:813962697180:android:d0d906b93dac685feb9719",
+        "android_client_info": {
+          "package_name": "com.lila.lila"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB69zoPlBFpzQTpJAT8uBKiMjx5D2T5DjI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

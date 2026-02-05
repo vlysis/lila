@@ -1,20 +1,17 @@
 import 'package:flutter/material.dart';
 import '../models/log_entry.dart';
+import '../theme/lila_theme.dart';
 
 class OrientationThreadsWidget extends StatelessWidget {
   final List<LogEntry> weekEntries;
 
   const OrientationThreadsWidget({super.key, required this.weekEntries});
 
-  static const _orientationColors = {
-    LogOrientation.self_: Color(0xFF9B8EC4),  // soft violet
-    LogOrientation.mutual: Color(0xFF6BA8A0), // warm teal
-    LogOrientation.other: Color(0xFFC4956B),  // terracotta
-  };
-
   @override
   Widget build(BuildContext context) {
     if (weekEntries.isEmpty) return const SizedBox.shrink();
+    final palette = context.lilaPalette;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
 
     final counts = <LogOrientation, int>{};
     for (final e in weekEntries) {
@@ -29,26 +26,31 @@ class OrientationThreadsWidget extends StatelessWidget {
         Text(
           'ORIENTATION',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.25),
+            color: onSurface.withValues(alpha: 0.25),
             fontSize: 11,
             letterSpacing: 1.2,
             fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 16),
-        ...LogOrientation.values.map((o) => _buildBar(o, counts, maxCount)),
+        ...LogOrientation.values.map(
+          (o) => _buildBar(context, o, counts, maxCount, palette),
+        ),
       ],
     );
   }
 
   Widget _buildBar(
+    BuildContext context,
     LogOrientation orientation,
     Map<LogOrientation, int> counts,
     int maxCount,
+    LilaPalette palette,
   ) {
     final count = counts[orientation] ?? 0;
     final fraction = count / maxCount;
-    final color = _orientationColors[orientation]!;
+    final color = palette.orientationColor(orientation);
+    final radii = context.lilaRadii;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -72,7 +74,7 @@ class OrientationThreadsWidget extends StatelessWidget {
                   height: 18,
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(9),
+                    borderRadius: BorderRadius.circular(radii.small),
                   ),
                   child: Align(
                     alignment: Alignment.centerLeft,
@@ -88,7 +90,7 @@ class OrientationThreadsWidget extends StatelessWidget {
                             color.withValues(alpha: 0.25),
                           ],
                         ),
-                        borderRadius: BorderRadius.circular(9),
+                        borderRadius: BorderRadius.circular(radii.small),
                       ),
                     ),
                   ),

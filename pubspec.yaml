@@ -63,6 +63,28 @@ flutter:
   assets:
     - assets/icons/
 
+  fonts:
+    - family: Roboto Slab
+      fonts:
+        - asset: Roboto_Slab/static/RobotoSlab-Thin.ttf
+          weight: 100
+        - asset: Roboto_Slab/static/RobotoSlab-ExtraLight.ttf
+          weight: 200
+        - asset: Roboto_Slab/static/RobotoSlab-Light.ttf
+          weight: 300
+        - asset: Roboto_Slab/static/RobotoSlab-Regular.ttf
+          weight: 400
+        - asset: Roboto_Slab/static/RobotoSlab-Medium.ttf
+          weight: 500
+        - asset: Roboto_Slab/static/RobotoSlab-SemiBold.ttf
+          weight: 600
+        - asset: Roboto_Slab/static/RobotoSlab-Bold.ttf
+          weight: 700
+        - asset: Roboto_Slab/static/RobotoSlab-ExtraBold.ttf
+          weight: 800
+        - asset: Roboto_Slab/static/RobotoSlab-Black.ttf
+          weight: 900
+
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 

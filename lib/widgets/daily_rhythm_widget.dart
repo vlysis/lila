@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/log_entry.dart';
+import '../theme/lila_theme.dart';
 
 class DailyRhythmWidget extends StatelessWidget {
   final Map<int, List<LogEntry>> entriesByDay;
@@ -8,13 +9,6 @@ class DailyRhythmWidget extends StatelessWidget {
 
   static const _dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   static const _timeLabels = ['morn', 'aftn', 'eve', 'night'];
-
-  static const _modeColors = {
-    Mode.nourishment: Color(0xFF6B8F71),
-    Mode.growth: Color(0xFF7B9EA8),
-    Mode.maintenance: Color(0xFFA8976B),
-    Mode.drift: Color(0xFF8B7B8B),
-  };
 
   int _timeBucket(int hour) {
     if (hour < 12) return 0;
@@ -50,7 +44,10 @@ class DailyRhythmWidget extends StatelessWidget {
         Text(
           'DAILY RHYTHM',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.25),
+            color: Theme.of(context)
+                .colorScheme
+                .onSurface
+                .withValues(alpha: 0.25),
             fontSize: 11,
             letterSpacing: 1.2,
             fontWeight: FontWeight.w600,
@@ -66,7 +63,10 @@ class DailyRhythmWidget extends StatelessWidget {
                   child: Text(
                     label,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.2),
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.2),
                       fontSize: 11,
                     ),
                   ),
@@ -76,12 +76,21 @@ class DailyRhythmWidget extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
-        ...List.generate(7, (day) => _buildRow(day, grid[day], maxCount)),
+        ...List.generate(
+          7,
+          (day) => _buildRow(context, day, grid[day], maxCount),
+        ),
       ],
     );
   }
 
-  Widget _buildRow(int dayIndex, List<List<LogEntry>> buckets, int maxCount) {
+  Widget _buildRow(
+    BuildContext context,
+    int dayIndex,
+    List<List<LogEntry>> buckets,
+    int maxCount,
+  ) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(
@@ -91,29 +100,38 @@ class DailyRhythmWidget extends StatelessWidget {
             child: Text(
               _dayLabels[dayIndex],
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.3),
+                color: onSurface.withValues(alpha: 0.3),
                 fontSize: 12,
               ),
             ),
           ),
           const SizedBox(width: 8),
-          ...buckets.map((entries) => _buildCell(entries, maxCount)),
+          ...buckets.map((entries) => _buildCell(context, entries, maxCount)),
         ],
       ),
     );
   }
 
-  Widget _buildCell(List<LogEntry> entries, int maxCount) {
+  Widget _buildCell(
+    BuildContext context,
+    List<LogEntry> entries,
+    int maxCount,
+  ) {
+    final palette = context.lilaPalette;
+    final radii = context.lilaRadii;
     Color cellColor;
     if (entries.isEmpty) {
-      cellColor = Colors.white.withValues(alpha: 0.03);
+      cellColor = Theme.of(context)
+          .colorScheme
+          .onSurface
+          .withValues(alpha: 0.03);
     } else {
       // Blend mode colors of all entries in this cell
       final intensity = maxCount > 0
           ? 0.12 + (entries.length / maxCount) * 0.45
           : 0.12;
       final dominantMode = _dominantMode(entries);
-      final baseColor = _modeColors[dominantMode]!;
+      final baseColor = palette.modeColor(dominantMode);
       cellColor = baseColor.withValues(alpha: intensity);
     }
 
@@ -124,7 +142,7 @@ class DailyRhythmWidget extends StatelessWidget {
           height: 28,
           decoration: BoxDecoration(
             color: cellColor,
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(radii.small),
           ),
         ),
       ),

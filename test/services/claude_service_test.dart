@@ -1,7 +1,8 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:lila/services/claude_service.dart';
+import 'package:lila/services/ai_integration_service.dart';
+import 'package:lila/services/ai_provider.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -40,140 +41,167 @@ void main() {
     );
 
     SharedPreferences.setMockInitialValues({});
-    ClaudeService.resetInstance();
+    AiIntegrationService.resetInstance();
   });
 
   tearDown(() {
-    ClaudeService.resetInstance();
+    AiIntegrationService.resetInstance();
   });
 
   group('key format validation', () {
     test('accepts valid API key format', () {
       const validKey = 'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCD';
-      expect(ClaudeService.validateKeyFormat(validKey), isNull);
+      expect(
+        AiIntegrationService.validateKeyFormat(AiProvider.claude, validKey),
+        isNull,
+      );
     });
 
     test('accepts key with underscores and hyphens', () {
       const validKey = 'sk-ant-api03-abc_def-ghi_jkl-mno_pqr-stu_vwx-yz0123456789';
-      expect(ClaudeService.validateKeyFormat(validKey), isNull);
+      expect(
+        AiIntegrationService.validateKeyFormat(AiProvider.claude, validKey),
+        isNull,
+      );
     });
 
     test('rejects empty key', () {
-      expect(ClaudeService.validateKeyFormat(''), isNotNull);
-      expect(ClaudeService.validateKeyFormat('   '), isNotNull);
+      expect(
+        AiIntegrationService.validateKeyFormat(AiProvider.claude, ''),
+        isNotNull,
+      );
+      expect(
+        AiIntegrationService.validateKeyFormat(AiProvider.claude, '   '),
+        isNotNull,
+      );
     });
 
     test('rejects key without sk-ant-api03 prefix', () {
       const invalidKey = 'api03-abcdefghijklmnopqrstuvwxyz0123456789ABCD';
-      expect(ClaudeService.validateKeyFormat(invalidKey), isNotNull);
+      expect(
+        AiIntegrationService.validateKeyFormat(AiProvider.claude, invalidKey),
+        isNotNull,
+      );
     });
 
     test('rejects key with wrong prefix', () {
       const invalidKey = 'sk-ant-api02-abcdefghijklmnopqrstuvwxyz0123456789ABCD';
-      expect(ClaudeService.validateKeyFormat(invalidKey), isNotNull);
+      expect(
+        AiIntegrationService.validateKeyFormat(AiProvider.claude, invalidKey),
+        isNotNull,
+      );
     });
 
     test('rejects key that is too short', () {
       const shortKey = 'sk-ant-api03-abc';
-      expect(ClaudeService.validateKeyFormat(shortKey), isNotNull);
+      expect(
+        AiIntegrationService.validateKeyFormat(AiProvider.claude, shortKey),
+        isNotNull,
+      );
     });
 
     test('rejects key with invalid characters', () {
       const invalidKey = 'sk-ant-api03-abc!@#\$%^&*()abcdefghijklmnopqrst';
-      expect(ClaudeService.validateKeyFormat(invalidKey), isNotNull);
+      expect(
+        AiIntegrationService.validateKeyFormat(AiProvider.claude, invalidKey),
+        isNotNull,
+      );
     });
 
     test('trims whitespace from key', () {
       const keyWithSpaces =
           '  sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCD  ';
-      expect(ClaudeService.validateKeyFormat(keyWithSpaces), isNull);
+      expect(
+        AiIntegrationService.validateKeyFormat(AiProvider.claude, keyWithSpaces),
+        isNull,
+      );
     });
   });
 
   group('initialization', () {
     test('hasApiKey is false when no key stored', () async {
-      final service = await ClaudeService.getInstance();
-      expect(service.hasApiKey, isFalse);
+      final service = await AiIntegrationService.getInstance();
+      expect(service.hasApiKey(AiProvider.claude), isFalse);
     });
 
     test('hasApiKey is true when key is stored', () async {
-      mockSecureStorage['lila_claude_api_key'] =
+      mockSecureStorage['lila_ai_api_key_claude'] =
           'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCD';
-      final service = await ClaudeService.getInstance();
-      expect(service.hasApiKey, isTrue);
+      final service = await AiIntegrationService.getInstance();
+      expect(service.hasApiKey(AiProvider.claude), isTrue);
     });
 
     test('maskedKey is null when no key stored', () async {
-      final service = await ClaudeService.getInstance();
-      expect(service.maskedKey, isNull);
+      final service = await AiIntegrationService.getInstance();
+      expect(service.maskedKey(AiProvider.claude), isNull);
     });
 
     test('maskedKey shows last 4 chars when key stored', () async {
-      mockSecureStorage['lila_claude_api_key'] =
+      mockSecureStorage['lila_ai_api_key_claude'] =
           'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCD';
-      final service = await ClaudeService.getInstance();
-      expect(service.maskedKey, equals('sk-ant-...ABCD'));
+      final service = await AiIntegrationService.getInstance();
+      expect(service.maskedKey(AiProvider.claude), equals('sk-ant-...ABCD'));
     });
   });
 
   group('saveApiKey', () {
     test('saves valid key to secure storage', () async {
-      final service = await ClaudeService.getInstance();
+      final service = await AiIntegrationService.getInstance();
       const key = 'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCD';
 
-      final error = await service.saveApiKey(key);
+      final error = await service.saveApiKey(AiProvider.claude, key);
 
       expect(error, isNull);
-      expect(mockSecureStorage['lila_claude_api_key'], equals(key));
-      expect(service.hasApiKey, isTrue);
-      expect(service.maskedKey, equals('sk-ant-...ABCD'));
+      expect(mockSecureStorage['lila_ai_api_key_claude'], equals(key));
+      expect(service.hasApiKey(AiProvider.claude), isTrue);
+      expect(service.maskedKey(AiProvider.claude), equals('sk-ant-...ABCD'));
     });
 
     test('trims whitespace when saving', () async {
-      final service = await ClaudeService.getInstance();
+      final service = await AiIntegrationService.getInstance();
       const key =
           '  sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCD  ';
       const trimmedKey =
           'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCD';
 
-      await service.saveApiKey(key);
+      await service.saveApiKey(AiProvider.claude, key);
 
-      expect(mockSecureStorage['lila_claude_api_key'], equals(trimmedKey));
+      expect(mockSecureStorage['lila_ai_api_key_claude'], equals(trimmedKey));
     });
 
     test('returns error for invalid key format', () async {
-      final service = await ClaudeService.getInstance();
+      final service = await AiIntegrationService.getInstance();
 
-      final error = await service.saveApiKey('invalid-key');
+      final error = await service.saveApiKey(AiProvider.claude, 'invalid-key');
 
       expect(error, isNotNull);
-      expect(service.hasApiKey, isFalse);
+      expect(service.hasApiKey(AiProvider.claude), isFalse);
     });
 
     test('returns error for empty key', () async {
-      final service = await ClaudeService.getInstance();
+      final service = await AiIntegrationService.getInstance();
 
-      final error = await service.saveApiKey('');
+      final error = await service.saveApiKey(AiProvider.claude, '');
 
       expect(error, isNotNull);
-      expect(service.hasApiKey, isFalse);
+      expect(service.hasApiKey(AiProvider.claude), isFalse);
     });
   });
 
   group('getApiKey', () {
     test('returns null when no key stored', () async {
-      final service = await ClaudeService.getInstance();
-      final key = await service.getApiKey();
+      final service = await AiIntegrationService.getInstance();
+      final key = await service.getApiKey(AiProvider.claude);
       expect(key, isNull);
     });
 
     test('returns key when stored', () async {
       const storedKey =
           'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCD';
-      mockSecureStorage['lila_claude_api_key'] = storedKey;
+      mockSecureStorage['lila_ai_api_key_claude'] = storedKey;
 
-      final service = await ClaudeService.getInstance();
-      final key = await service.getApiKey();
+      final service = await AiIntegrationService.getInstance();
+      final key = await service.getApiKey(AiProvider.claude);
 
       expect(key, equals(storedKey));
     });
@@ -181,27 +209,27 @@ void main() {
 
   group('deleteApiKey', () {
     test('removes key from secure storage', () async {
-      mockSecureStorage['lila_claude_api_key'] =
+      mockSecureStorage['lila_ai_api_key_claude'] =
           'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCD';
-      final service = await ClaudeService.getInstance();
-      expect(service.hasApiKey, isTrue);
+      final service = await AiIntegrationService.getInstance();
+      expect(service.hasApiKey(AiProvider.claude), isTrue);
 
-      await service.deleteApiKey();
+      await service.deleteApiKey(AiProvider.claude);
 
-      expect(mockSecureStorage['lila_claude_api_key'], isNull);
-      expect(service.hasApiKey, isFalse);
-      expect(service.maskedKey, isNull);
+      expect(mockSecureStorage['lila_ai_api_key_claude'], isNull);
+      expect(service.hasApiKey(AiProvider.claude), isFalse);
+      expect(service.maskedKey(AiProvider.claude), isNull);
     });
 
     test('disables integration when key deleted', () async {
-      mockSecureStorage['lila_claude_api_key'] =
+      mockSecureStorage['lila_ai_api_key_claude'] =
           'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCD';
       SharedPreferences.setMockInitialValues({
-        'claude_integration_enabled': true,
+        'ai_integration_enabled': true,
       });
 
-      final service = await ClaudeService.getInstance();
-      await service.deleteApiKey();
+      final service = await AiIntegrationService.getInstance();
+      await service.deleteApiKey(AiProvider.claude);
 
       expect(service.isEnabled, isFalse);
     });
@@ -209,42 +237,42 @@ void main() {
 
   group('integration toggle', () {
     test('isEnabled is false when no key', () async {
-      final service = await ClaudeService.getInstance();
+      final service = await AiIntegrationService.getInstance();
       expect(service.isEnabled, isFalse);
     });
 
     test('isEnabled is false when key exists but not enabled', () async {
-      mockSecureStorage['lila_claude_api_key'] =
+      mockSecureStorage['lila_ai_api_key_claude'] =
           'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCD';
-      final service = await ClaudeService.getInstance();
+      final service = await AiIntegrationService.getInstance();
       expect(service.isEnabled, isFalse);
     });
 
     test('isEnabled is true when key exists and enabled', () async {
-      mockSecureStorage['lila_claude_api_key'] =
+      mockSecureStorage['lila_ai_api_key_claude'] =
           'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCD';
       SharedPreferences.setMockInitialValues({
-        'claude_integration_enabled': true,
+        'ai_integration_enabled': true,
       });
 
-      final service = await ClaudeService.getInstance();
+      final service = await AiIntegrationService.getInstance();
       expect(service.isEnabled, isTrue);
     });
 
     test('setEnabled persists state', () async {
-      mockSecureStorage['lila_claude_api_key'] =
+      mockSecureStorage['lila_ai_api_key_claude'] =
           'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCD';
-      final service = await ClaudeService.getInstance();
+      final service = await AiIntegrationService.getInstance();
 
       await service.setEnabled(true);
 
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getBool('claude_integration_enabled'), isTrue);
+      expect(prefs.getBool('ai_integration_enabled'), isTrue);
       expect(service.isEnabled, isTrue);
     });
 
     test('cannot enable without key', () async {
-      final service = await ClaudeService.getInstance();
+      final service = await AiIntegrationService.getInstance();
 
       await service.setEnabled(true);
 
@@ -254,36 +282,25 @@ void main() {
 
   group('model selection', () {
     test('default model is haiku', () async {
-      final service = await ClaudeService.getInstance();
-      expect(service.selectedModel, equals('claude-haiku-4-5-20251001'));
+      final service = await AiIntegrationService.getInstance();
+      expect(
+        service.selectedModel(AiProvider.claude),
+        equals('claude-haiku-4-5-20251001'),
+      );
     });
 
     test('setModel persists selection', () async {
-      final service = await ClaudeService.getInstance();
+      final service = await AiIntegrationService.getInstance();
 
-      await service.setModel('claude-sonnet-4-20250514');
+      await service.setModel(AiProvider.claude, 'claude-sonnet-4-20250514');
 
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString('claude_model'),
+      expect(prefs.getString('ai_model_claude'),
           equals('claude-sonnet-4-20250514'));
-      expect(service.selectedModel, equals('claude-sonnet-4-20250514'));
-    });
-  });
-
-  group('daily token cap', () {
-    test('default cap is 0 (no cap)', () async {
-      final service = await ClaudeService.getInstance();
-      expect(service.dailyTokenCap, equals(0));
-    });
-
-    test('setDailyTokenCap persists value', () async {
-      final service = await ClaudeService.getInstance();
-
-      await service.setDailyTokenCap(100000);
-
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getInt('claude_daily_token_cap'), equals(100000));
-      expect(service.dailyTokenCap, equals(100000));
+      expect(
+        service.selectedModel(AiProvider.claude),
+        equals('claude-sonnet-4-20250514'),
+      );
     });
   });
 }

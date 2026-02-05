@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/log_entry.dart';
 import '../services/file_service.dart';
+import '../services/ai_integration_service.dart';
+import '../widgets/armed_swipe_to_delete.dart';
+import '../widgets/day_discussion_sheet.dart';
+import '../theme/lila_theme.dart';
 
 class DailyReflectionScreen extends StatefulWidget {
   final DateTime date;
@@ -17,28 +21,16 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
   List<LogEntry> _entries = [];
   String _savedReflectionText = '';
   bool _loading = true;
+  bool _aiEnabled = false;
 
   final _reflectionController = TextEditingController();
   Timer? _saveTimer;
-
-  static const _modeColors = {
-    Mode.nourishment: Color(0xFF6B8F71),
-    Mode.growth: Color(0xFF7B9EA8),
-    Mode.maintenance: Color(0xFFA8976B),
-    Mode.drift: Color(0xFF8B7B8B),
-  };
 
   static const _modeAssets = {
     Mode.nourishment: 'assets/icons/nourishment.png',
     Mode.growth: 'assets/icons/growth.png',
     Mode.maintenance: 'assets/icons/maintenence.png',
     Mode.drift: 'assets/icons/drift.png',
-  };
-
-  static const _orientationColors = {
-    LogOrientation.self_: Color(0xFF9B8EC4),
-    LogOrientation.mutual: Color(0xFF6BA8A0),
-    LogOrientation.other: Color(0xFFA87B6B),
   };
 
   @override
@@ -59,11 +51,13 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
     final fs = await FileService.getInstance();
     final entries = await fs.readDailyEntries(widget.date);
     final reflection = await fs.readDailyReflection(widget.date);
+    final integrationService = await AiIntegrationService.getInstance();
 
     if (mounted) {
       setState(() {
         _entries = entries;
         _savedReflectionText = reflection;
+        _aiEnabled = integrationService.isEnabled;
         if (_loading) {
           _reflectionController.text = reflection;
         }
@@ -105,6 +99,33 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
     }
   }
 
+  Future<void> _deleteEntry(LogEntry entry) async {
+    final fs = await FileService.getInstance();
+    final removed = await fs.moveEntryToTrash(entry);
+    if (removed && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Moved to trash'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _load();
+    }
+  }
+
+  void _openDiscussion() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DayDiscussionSheet(
+        date: widget.date,
+        entries: _entries,
+        reflectionText: _reflectionController.text,
+      ),
+    );
+  }
+
   String _buildSummaryText() {
     if (_entries.isEmpty) return 'No moments logged.';
 
@@ -119,64 +140,29 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
     return '$count moment${count == 1 ? '' : 's'} \u2014 $modeNames';
   }
 
-  String? _generateWhisper() {
-    if (_entries.isEmpty) return null;
-
-    final modeCounts = <Mode, int>{};
-    final orientationCounts = <LogOrientation, int>{};
-    for (final e in _entries) {
-      modeCounts[e.mode] = (modeCounts[e.mode] ?? 0) + 1;
-      orientationCounts[e.orientation] =
-          (orientationCounts[e.orientation] ?? 0) + 1;
-    }
-
-    if (modeCounts[Mode.nourishment] == 1 && _entries.length > 1) {
-      return 'First Nourishment logged today.';
-    }
-
-    final otherCount = orientationCounts[LogOrientation.other] ?? 0;
-    if (otherCount > _entries.length / 2 && _entries.length >= 3) {
-      return 'Mostly Other-directed so far.';
-    }
-
-    final selfCount = orientationCounts[LogOrientation.self_] ?? 0;
-    if (selfCount > _entries.length / 2 && _entries.length >= 3) {
-      return 'Mostly Self-directed today.';
-    }
-
-    if (modeCounts[Mode.drift] != null && modeCounts[Mode.drift]! >= 1) {
-      final lastEntry = _entries.last;
-      if (lastEntry.mode == Mode.drift) {
-        return 'Drift noticed.';
-      }
-    }
-
-    if (_entries.length == 1) {
-      return 'Day started.';
-    }
-
-    return '${_entries.length} moments logged today.';
-  }
-
   @override
   Widget build(BuildContext context) {
     final dateStr = DateFormat('EEEE, MMMM d').format(widget.date);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final radii = context.lilaRadii;
+    final onSurface = colorScheme.onSurface;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back,
-              color: Colors.white.withValues(alpha: 0.7)),
+              color: onSurface.withValues(alpha: 0.7)),
           onPressed: () => Navigator.pop(context),
         ),
       ),
       body: _loading
-          ? const Center(
+          ? Center(
               child: CircularProgressIndicator(
-                color: Color(0xFF7B9EA8),
+                color: colorScheme.primary,
                 strokeWidth: 2,
               ),
             )
@@ -190,7 +176,7 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
                     Text(
                       dateStr,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.9),
+                        color: onSurface.withValues(alpha: 0.9),
                         fontSize: 28,
                         fontWeight: FontWeight.w300,
                       ),
@@ -199,91 +185,131 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
                     Text(
                       _buildSummaryText(),
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.35),
+                        color: onSurface.withValues(alpha: 0.35),
                         fontSize: 14,
                       ),
                     ),
-                    if (_generateWhisper() != null) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        _generateWhisper()!,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.5),
-                          fontSize: 14,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ],
                     if (_entries.isNotEmpty) ...[
                       const SizedBox(height: 24),
-                      Text(
-                        'TODAY\u2019S MOMENTS',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.25),
-                          fontSize: 11,
-                          letterSpacing: 1.2,
-                          fontWeight: FontWeight.w600,
+                      _sectionCard(
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'TODAY\u2019S MOMENTS',
+                              style: TextStyle(
+                                color: onSurface.withValues(alpha: 0.25),
+                                fontSize: 11,
+                                letterSpacing: 1.2,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            ..._entries.map(_buildEntryCard),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      ..._entries.map(_buildEntryCard),
                     ],
                     const SizedBox(height: 32),
-                    Text(
-                      'REFLECTION',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.25),
-                        fontSize: 11,
-                        letterSpacing: 1.2,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _reflectionController,
-                      onChanged: _onReflectionChanged,
-                      maxLines: null,
-                      minLines: 6,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.8),
-                        fontSize: 15,
-                        height: 1.6,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'How did today feel?',
-                        hintStyle: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          fontStyle: FontStyle.italic,
-                        ),
-                        filled: true,
-                        fillColor: Colors.white.withValues(alpha: 0.04),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.all(16),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Center(
-                      child: TextButton(
-                        onPressed: _logReflection,
-                        style: TextButton.styleFrom(
-                          backgroundColor: const Color(0xFF2A2A2A),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 32, vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                    _sectionCard(
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'REFLECTION',
+                            style: TextStyle(
+                              color: onSurface.withValues(alpha: 0.25),
+                              fontSize: 11,
+                              letterSpacing: 1.2,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                        child: Text(
-                          'Log',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.8),
-                            fontSize: 16,
-                            fontWeight: FontWeight.w400,
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _reflectionController,
+                            onChanged: _onReflectionChanged,
+                            maxLines: null,
+                            minLines: 6,
+                            style: TextStyle(
+                              color: onSurface.withValues(alpha: 0.8),
+                              fontSize: 15,
+                              height: 1.6,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'How did today feel?',
+                              hintStyle: TextStyle(
+                                color: onSurface.withValues(alpha: 0.3),
+                                fontStyle: FontStyle.italic,
+                              ),
+                              filled: true,
+                              fillColor: colorScheme.surfaceVariant
+                                  .withValues(alpha: 0.6),
+                              border: OutlineInputBorder(
+                                borderRadius:
+                                    BorderRadius.circular(radii.medium),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.all(16),
+                            ),
                           ),
-                        ),
+                          const SizedBox(height: 24),
+                          Center(
+                            child: TextButton(
+                              onPressed: _logReflection,
+                              style: TextButton.styleFrom(
+                                backgroundColor:
+                                    colorScheme.surfaceVariant,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 32, vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(radii.medium),
+                                ),
+                              ),
+                              child: Text(
+                                'Log',
+                                style: TextStyle(
+                                  color: onSurface.withValues(alpha: 0.8),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (_aiEnabled) ...[
+                            const SizedBox(height: 24),
+                            Center(
+                              child: OutlinedButton.icon(
+                                onPressed: _openDiscussion,
+                                icon: Icon(
+                                  Icons.chat_bubble_outline,
+                                  size: 18,
+                                  color: onSurface.withValues(alpha: 0.6),
+                                ),
+                                label: Text(
+                                  'Discuss your day',
+                                  style: TextStyle(
+                                    color: onSurface.withValues(alpha: 0.6),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 24, vertical: 12),
+                                  side: BorderSide(
+                                    color:
+                                        onSurface.withValues(alpha: 0.15),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(
+                                        radii.medium),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ],
@@ -294,83 +320,101 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
   }
 
   Widget _buildEntryCard(LogEntry entry) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final radii = context.lilaRadii;
+    final onSurface = colorScheme.onSurface;
+    final palette = context.lilaPalette;
     final time =
         '${entry.timestamp.hour.toString().padLeft(2, '0')}:${entry.timestamp.minute.toString().padLeft(2, '0')}';
     final isReflection = entry.label == 'Daily reflection';
 
     if (isReflection) {
-      return _buildReflectionCard(time);
+      return ArmedSwipeToDelete(
+        dismissKey: ValueKey(
+            '${entry.timestamp.toIso8601String()}-${entry.label ?? ''}-${entry.mode.name}-${entry.orientation.name}'),
+        onDelete: () => _deleteEntry(entry),
+        child: _buildReflectionCard(time),
+      );
     }
 
-    final modeColor = _modeColors[entry.mode] ?? Colors.grey;
+    final modeColor = palette.modeColor(entry.mode);
     final modeAsset = _modeAssets[entry.mode]!;
-    final orientationColor =
-        _orientationColors[entry.orientation] ?? Colors.grey;
+    final orientationColor = palette.orientationColor(entry.orientation);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: modeColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Center(
-                child: Image.asset(
-                  modeAsset,
-                  width: 20,
-                  height: 20,
-                  color: modeColor,
+    return ArmedSwipeToDelete(
+      dismissKey: ValueKey(
+          '${entry.timestamp.toIso8601String()}-${entry.label ?? ''}-${entry.mode.name}-${entry.orientation.name}'),
+      onDelete: () => _deleteEntry(entry),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceVariant.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(radii.medium),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: modeColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(radii.medium),
+                ),
+                child: Center(
+                  child: Image.asset(
+                    modeAsset,
+                    width: 20,
+                    height: 20,
+                    color: modeColor,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    entry.label ?? entry.mode.label,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 15,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.label ?? entry.mode.label,
+                      style: TextStyle(
+                        color: onSurface.withValues(alpha: 0.8),
+                        fontSize: 15,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 5),
-                  Row(
-                    children: [
-                      _buildPill(entry.mode.label, modeColor),
-                      const SizedBox(width: 6),
-                      _buildPill(entry.orientation.label, orientationColor),
-                    ],
-                  ),
-                ],
+                    const SizedBox(height: 5),
+                    Row(
+                      children: [
+                        _buildPill(entry.mode.label, modeColor),
+                        const SizedBox(width: 6),
+                        _buildPill(entry.orientation.label, orientationColor),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Text(
-              time,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.25),
-                fontSize: 12,
-                fontFeatures: const [FontFeature.tabularFigures()],
+              Text(
+                time,
+                style: TextStyle(
+                  color: onSurface.withValues(alpha: 0.25),
+                  fontSize: 12,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildReflectionCard(String time) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final radii = context.lilaRadii;
+    final onSurface = colorScheme.onSurface;
     final reflectionText = _savedReflectionText.trim();
     final preview = reflectionText.isNotEmpty
         ? (reflectionText.length > 80
@@ -383,8 +427,8 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(12),
+          color: colorScheme.surfaceVariant.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(radii.medium),
         ),
         child: Row(
           children: [
@@ -396,7 +440,7 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
                     Text(
                       preview,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.7),
+                        color: onSurface.withValues(alpha: 0.7),
                         fontSize: 14,
                         fontStyle: FontStyle.italic,
                         height: 1.4,
@@ -404,8 +448,10 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
                     ),
                     const SizedBox(height: 6),
                   ],
-                  _buildPill('Daily reflection',
-                      Colors.white.withValues(alpha: 0.4)),
+                  _buildPill(
+                    'Daily reflection',
+                    onSurface.withValues(alpha: 0.4),
+                  ),
                 ],
               ),
             ),
@@ -413,7 +459,7 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
             Text(
               time,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.25),
+                color: onSurface.withValues(alpha: 0.25),
                 fontSize: 12,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
@@ -425,20 +471,45 @@ class _DailyReflectionScreenState extends State<DailyReflectionScreen> {
   }
 
   Widget _buildPill(String text, Color color) {
+    final radii = context.lilaRadii;
+    final textStyle = Theme.of(context).textTheme.labelSmall ??
+        const TextStyle(fontSize: 11, fontWeight: FontWeight.w500);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(radii.small),
       ),
       child: Text(
         text,
         style: TextStyle(
           color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
+          fontSize: textStyle.fontSize,
+          fontWeight: textStyle.fontWeight,
+          letterSpacing: textStyle.letterSpacing,
         ),
       ),
+    );
+  }
+
+  Widget _sectionCard(
+    Widget child, {
+    EdgeInsetsGeometry padding = const EdgeInsets.all(16),
+  }) {
+    final theme = Theme.of(context);
+    final radii = context.lilaRadii;
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceVariant.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(radii.medium),
+        border: Border.all(
+          color: colorScheme.outline.withValues(alpha: 0.3),
+        ),
+      ),
+      child: child,
     );
   }
 }

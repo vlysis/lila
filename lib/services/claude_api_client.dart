@@ -2,67 +2,10 @@ import 'dart:async';
 import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'claude_service.dart';
-import 'claude_usage_service.dart';
-
-/// Error states for Claude API operations.
-enum ClaudeApiError {
-  keyInvalid,
-  rateLimited,
-  serverError,
-  networkOffline,
-  timeout,
-  storageFailed,
-  dailyCapReached,
-  integrationPaused,
-  unknown,
-}
-
-/// Extension to get user-facing messages for errors.
-extension ClaudeApiErrorMessage on ClaudeApiError {
-  String get userMessage {
-    switch (this) {
-      case ClaudeApiError.keyInvalid:
-        return 'Your API key is invalid or has been revoked. Please check and re-enter.';
-      case ClaudeApiError.rateLimited:
-        return "You've reached the API usage limit. Please wait a moment and try again.";
-      case ClaudeApiError.serverError:
-        return "Something went wrong on Anthropic's side. We'll retry automatically.";
-      case ClaudeApiError.networkOffline:
-        return "No internet connection. Claude features are paused until you're back online.";
-      case ClaudeApiError.timeout:
-        return 'The request took too long. Please try again.';
-      case ClaudeApiError.storageFailed:
-        return 'Unable to save your key securely. Please check device settings and retry.';
-      case ClaudeApiError.dailyCapReached:
-        return "You've reached your daily token limit. Usage resets at midnight UTC.";
-      case ClaudeApiError.integrationPaused:
-        return 'Claude integration is paused. Enable it in Settings to continue.';
-      case ClaudeApiError.unknown:
-        return 'An unexpected error occurred. Please try again.';
-    }
-  }
-}
-
-/// Result of a Claude API call.
-class ClaudeApiResult<T> {
-  final T? data;
-  final ClaudeApiError? error;
-  final int? statusCode;
-  final int? inputTokens;
-  final int? outputTokens;
-
-  ClaudeApiResult({
-    this.data,
-    this.error,
-    this.statusCode,
-    this.inputTokens,
-    this.outputTokens,
-  });
-
-  bool get isSuccess => error == null && data != null;
-  bool get isError => error != null;
-}
+import 'ai_api_types.dart';
+import 'ai_integration_service.dart';
+import 'ai_provider.dart';
+import 'ai_usage_service.dart';
 
 /// Client for communicating with the Claude API.
 class ClaudeApiClient {
@@ -81,9 +24,9 @@ class ClaudeApiClient {
 
   static ClaudeApiClient? _instance;
   late final Dio _dio;
-  final ClaudeService _claudeService;
+  final AiIntegrationService _integrationService;
 
-  ClaudeApiClient._(this._claudeService) {
+  ClaudeApiClient._(this._integrationService) {
     _dio = Dio(BaseOptions(
       baseUrl: _baseUrl,
       connectTimeout: _connectTimeout,
@@ -103,8 +46,8 @@ class ClaudeApiClient {
 
   static Future<ClaudeApiClient> getInstance() async {
     if (_instance == null) {
-      final claudeService = await ClaudeService.getInstance();
-      _instance = ClaudeApiClient._(claudeService);
+      final integrationService = await AiIntegrationService.getInstance();
+      _instance = ClaudeApiClient._(integrationService);
     }
     return _instance!;
   }
@@ -114,7 +57,7 @@ class ClaudeApiClient {
 
   /// Validates an API key by making a minimal request.
   /// Returns null if valid, or an error if invalid.
-  Future<ClaudeApiError?> validateApiKey(String apiKey) async {
+  Future<AiApiError?> validateApiKey(String apiKey) async {
     final result = await _makeRequest<Map<String, dynamic>>(
       '/v1/messages',
       {
@@ -132,36 +75,47 @@ class ClaudeApiClient {
   }
 
   /// Sends a message to Claude and returns the response.
-  Future<ClaudeApiResult<String>> sendMessage({
+  ///
+  /// If [messageHistory] is provided, it should be a list of message maps
+  /// with 'role' ('user' or 'assistant') and 'content' keys. The [message]
+  /// parameter will be appended as the final user message.
+  Future<AiApiResult<String>> sendMessage({
     required String message,
     String? model,
     int maxTokens = 1024,
     String? systemPrompt,
+    List<Map<String, String>>? messageHistory,
   }) async {
     // Check if integration is enabled
-    if (!_claudeService.isEnabled) {
-      return ClaudeApiResult(error: ClaudeApiError.integrationPaused);
+    if (!_integrationService.isEnabledFor(AiProvider.claude)) {
+      return AiApiResult(error: AiApiError.integrationPaused);
     }
 
     // Check daily cap
-    final usageService = await ClaudeUsageService.getInstance();
+    final usageService = await AiUsageService.getInstance(AiProvider.claude);
     if (!usageService.canMakeRequest) {
-      return ClaudeApiResult(error: ClaudeApiError.dailyCapReached);
+      return AiApiResult(error: AiApiError.dailyCapReached);
     }
 
-    final apiKey = await _claudeService.getApiKey();
+    final apiKey = await _integrationService.getApiKey(AiProvider.claude);
     if (apiKey == null) {
-      return ClaudeApiResult(error: ClaudeApiError.keyInvalid);
+      return AiApiResult(error: AiApiError.keyInvalid);
     }
 
-    final selectedModel = model ?? _claudeService.selectedModel;
+    final selectedModel =
+        model ?? _integrationService.selectedModel(AiProvider.claude);
+
+    // Build messages array from history plus new message
+    final messages = <Map<String, String>>[];
+    if (messageHistory != null) {
+      messages.addAll(messageHistory);
+    }
+    messages.add({'role': 'user', 'content': message});
 
     final body = <String, dynamic>{
       'model': selectedModel,
       'max_tokens': maxTokens,
-      'messages': [
-        {'role': 'user', 'content': message}
-      ],
+      'messages': messages,
     };
 
     if (systemPrompt != null) {
@@ -176,10 +130,10 @@ class ClaudeApiClient {
 
     if (result.isError) {
       // Auto-pause on 401 during normal usage
-      if (result.error == ClaudeApiError.keyInvalid) {
-        await _claudeService.setEnabled(false);
+      if (result.error == AiApiError.keyInvalid) {
+        await _integrationService.setEnabled(false);
       }
-      return ClaudeApiResult(
+      return AiApiResult(
         error: result.error,
         statusCode: result.statusCode,
       );
@@ -201,7 +155,7 @@ class ClaudeApiClient {
     );
     final text = textBlock?['text'] as String? ?? '';
 
-    return ClaudeApiResult(
+    return AiApiResult(
       data: text,
       statusCode: result.statusCode,
       inputTokens: result.inputTokens,
@@ -210,15 +164,16 @@ class ClaudeApiClient {
   }
 
   /// Makes an HTTP request with retry logic.
-  Future<ClaudeApiResult<T>> _makeRequest<T>(
+  Future<AiApiResult<T>> _makeRequest<T>(
     String path,
     Map<String, dynamic> body, {
     String? apiKeyOverride,
     bool skipRetry = false,
   }) async {
-    final apiKey = apiKeyOverride ?? await _claudeService.getApiKey();
+    final apiKey =
+        apiKeyOverride ?? await _integrationService.getApiKey(AiProvider.claude);
     if (apiKey == null) {
-      return ClaudeApiResult(error: ClaudeApiError.keyInvalid);
+      return AiApiResult(error: AiApiError.keyInvalid);
     }
 
     int attempt = 0;
@@ -247,7 +202,7 @@ class ClaudeApiClient {
           }
         }
 
-        return ClaudeApiResult(
+        return AiApiResult(
           data: response.data,
           statusCode: response.statusCode,
           inputTokens: inputTokens,
@@ -266,7 +221,7 @@ class ClaudeApiClient {
           continue;
         }
 
-        return ClaudeApiResult(
+        return AiApiResult(
           error: error,
           statusCode: statusCode,
         );
@@ -274,23 +229,23 @@ class ClaudeApiClient {
     }
   }
 
-  /// Maps DioException to ClaudeApiError.
-  ClaudeApiError _mapDioError(DioException e) {
+  /// Maps DioException to AiApiError.
+  AiApiError _mapDioError(DioException e) {
     final statusCode = e.response?.statusCode;
 
     if (statusCode != null) {
       switch (statusCode) {
         case 401:
-          return ClaudeApiError.keyInvalid;
+          return AiApiError.keyInvalid;
         case 429:
-          return ClaudeApiError.rateLimited;
+          return AiApiError.rateLimited;
         case 500:
         case 502:
         case 503:
         case 504:
-          return ClaudeApiError.serverError;
+          return AiApiError.serverError;
         default:
-          return ClaudeApiError.unknown;
+          return AiApiError.unknown;
       }
     }
 
@@ -298,11 +253,11 @@ class ClaudeApiClient {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:
-        return ClaudeApiError.timeout;
+        return AiApiError.timeout;
       case DioExceptionType.connectionError:
-        return ClaudeApiError.networkOffline;
+        return AiApiError.networkOffline;
       default:
-        return ClaudeApiError.unknown;
+        return AiApiError.unknown;
     }
   }
 
@@ -318,15 +273,19 @@ class ClaudeApiClient {
 
 /// Interceptor that redacts API keys from logs.
 class _LogRedactionInterceptor extends Interceptor {
-  static final _keyPattern = RegExp(r'sk-ant-api03-[A-Za-z0-9_-]+');
+  static final _keyPattern =
+      RegExp(r'(sk-ant-api03-[A-Za-z0-9_-]+|AIza[0-9A-Za-z\\-_]+)');
 
   String _redact(String input) {
     return input.replaceAllMapped(_keyPattern, (match) {
       final key = match.group(0)!;
       if (key.length > 15) {
-        return 'sk-ant-...${key.substring(key.length - 4)}';
+        if (key.startsWith('sk-ant')) {
+          return 'sk-ant-...${key.substring(key.length - 4)}';
+        }
+        return 'AIza...${key.substring(key.length - 4)}';
       }
-      return 'sk-ant-...[REDACTED]';
+      return '...[REDACTED]';
     });
   }
 

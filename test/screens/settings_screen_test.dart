@@ -6,9 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lila/screens/settings_screen.dart';
 import 'package:lila/services/file_service.dart';
-import 'package:lila/services/claude_service.dart';
+import 'package:lila/services/ai_integration_service.dart';
+import 'package:lila/services/ai_usage_service.dart';
+import 'package:lila/services/ai_provider.dart';
 import 'package:lila/services/claude_api_client.dart';
-import 'package:lila/services/claude_usage_service.dart';
 
 /// Fake [FilePicker] that returns a predetermined directory path.
 class FakeFilePicker extends FilePicker {
@@ -74,15 +75,15 @@ void main() {
     FilePicker.platform = fakePicker;
 
     FileService.resetInstance();
-    ClaudeService.resetInstance();
+    AiIntegrationService.resetInstance();
     SharedPreferences.setMockInitialValues({});
   });
 
   tearDown(() {
     FileService.resetInstance();
-    ClaudeService.resetInstance();
+    AiIntegrationService.resetInstance();
     ClaudeApiClient.resetInstance();
-    ClaudeUsageService.resetInstance();
+    AiUsageService.resetInstance(AiProvider.claude);
     tempDir.deleteSync(recursive: true);
   });
 
@@ -96,7 +97,8 @@ void main() {
   Future<void> pumpSettingsScreen(WidgetTester tester) async {
     await tester.runAsync(() async {
       await FileService.getInstance();
-      await ClaudeService.getInstance();
+      await AiIntegrationService.getInstance();
+      await AiUsageService.getInstance(AiProvider.claude);
     });
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
@@ -122,6 +124,16 @@ void main() {
   testWidgets('displays Change button', (tester) async {
     await pumpSettingsScreen(tester);
     expect(find.text('Change'), findsOneWidget);
+  });
+
+  testWidgets('displays Backup vault button', (tester) async {
+    await pumpSettingsScreen(tester);
+    expect(find.text('Backup vault'), findsOneWidget);
+  });
+
+  testWidgets('displays Restore vault button', (tester) async {
+    await pumpSettingsScreen(tester);
+    expect(find.text('Restore vault'), findsOneWidget);
   });
 
   group('bottom sheet', () {

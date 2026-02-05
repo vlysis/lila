@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/log_entry.dart';
 import '../services/file_service.dart';
+import '../theme/lila_theme.dart';
 
 class LogBottomSheet extends StatefulWidget {
   final VoidCallback onLogged;
@@ -20,13 +21,6 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
   List<String> _recentLabels = [];
   bool _showLabel = false;
   bool _saving = false;
-
-  static const _modeColors = {
-    Mode.nourishment: Color(0xFF6B8F71),
-    Mode.growth: Color(0xFF7B9EA8),
-    Mode.maintenance: Color(0xFFA8976B),
-    Mode.drift: Color(0xFF8B7B8B),
-  };
 
   static const _orientationAssets = {
     LogOrientation.self_: 'assets/icons/self.png',
@@ -113,26 +107,37 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle bar
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(2),
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final radii = context.lilaRadii;
+    return AnimatedPadding(
+      key: const ValueKey('log_sheet_inset_padding'),
+      padding: EdgeInsets.only(bottom: bottomInset),
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.bottomSheetTheme.backgroundColor ??
+              colorScheme.surface,
+          borderRadius:
+              BorderRadius.vertical(top: Radius.circular(radii.large)),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: colorScheme.onSurface.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(radii.small),
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 24),
 
             // Mode selection
             if (_selectedMode == null) ...[
@@ -199,7 +204,8 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
               const SizedBox(height: 16),
               _buildSaveButton(),
             ],
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -214,7 +220,7 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
       mainAxisSpacing: 12,
       childAspectRatio: 2.2,
       children: Mode.values.map((mode) {
-        final color = _modeColors[mode]!;
+        final color = context.lilaPalette.modeColor(mode);
         final asset = _modeAssets[mode]!;
         return GestureDetector(
           onTap: () => _selectMode(mode),
@@ -252,7 +258,7 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
 
   Widget _buildSelectedModeBadge() {
     final mode = _selectedMode!;
-    final color = _modeColors[mode]!;
+    final color = context.lilaPalette.modeColor(mode);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -361,7 +367,7 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
 
   Widget _buildDurationSelector() {
     final presets = _selectedMode!.durationPresets;
-    final modeColor = _modeColors[_selectedMode!]!;
+    final modeColor = context.lilaPalette.modeColor(_selectedMode!);
     return Row(
       children: presets.map((preset) {
         final isSelected = _selectedDuration == preset;
@@ -420,7 +426,7 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
 
   Widget _buildSelectedDurationBadge() {
     final d = _selectedDuration!;
-    final modeColor = _modeColors[_selectedMode!]!;
+    final modeColor = context.lilaPalette.modeColor(_selectedMode!);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(

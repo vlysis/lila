@@ -1,3 +1,5 @@
+import 'focus_state.dart';
+
 enum Mode {
   nourishment,
   growth,
@@ -41,6 +43,12 @@ enum DurationPreset {
   spiral;
 
   String get label {
+    if (this == DurationPreset.brief) {
+      return 'Energizing';
+    }
+    if (this == DurationPreset.lost) {
+      return 'Short';
+    }
     return name[0].toUpperCase() + name.substring(1);
   }
 }
@@ -78,6 +86,7 @@ class LogEntry {
   final Mode mode;
   final LogOrientation orientation;
   final DurationPreset? duration;
+  final FocusSeason? season;
   final DateTime timestamp;
 
   LogEntry({
@@ -85,6 +94,7 @@ class LogEntry {
     required this.mode,
     required this.orientation,
     this.duration,
+    this.season,
     required this.timestamp,
   });
 
@@ -96,6 +106,9 @@ class LogEntry {
     buffer.writeln('- **$activityLabel**  ');
     buffer.writeln('  mode:: ${mode.name}  ');
     buffer.writeln('  orientation:: ${orientation.markdownValue}  ');
+    if (season != null) {
+      buffer.writeln('  season:: ${season!.storageValue}  ');
+    }
     if (duration != null) {
       buffer.writeln('  duration:: ${duration!.name}  ');
     }
@@ -108,6 +121,7 @@ class LogEntry {
     final modeMatch = RegExp(r'mode:: (\w+)').firstMatch(block);
     final orientationMatch =
         RegExp(r'orientation:: (\w+)').firstMatch(block);
+    final seasonMatch = RegExp(r'season:: (\w+)').firstMatch(block);
     final durationMatch = RegExp(r'duration:: (\w+)').firstMatch(block);
     final timeMatch = RegExp(r'at:: (\d{2}:\d{2})').firstMatch(block);
 
@@ -131,6 +145,11 @@ class LogEntry {
           .firstOrNull;
     }
 
+    FocusSeason? season;
+    if (seasonMatch != null) {
+      season = FocusSeason.fromStorage(seasonMatch.group(1)!);
+    }
+
     DateTime timestamp = DateTime.now();
     if (timeMatch != null) {
       final parts = timeMatch.group(1)!.split(':');
@@ -148,6 +167,7 @@ class LogEntry {
       mode: mode,
       orientation: orientation,
       duration: duration,
+      season: season,
       timestamp: timestamp,
     );
   }
