@@ -102,6 +102,10 @@ void main() {
     });
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await tester.pump();
   }
 
   /// Tap Change, wait for the bottom sheet, then tap an option and settle.
@@ -227,6 +231,11 @@ void main() {
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
 
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      });
+      await tester.pump();
+
       expect(find.text(defaultVault), findsOneWidget);
       expect(find.text('Vault location updated.'), findsNothing);
     });
@@ -245,6 +254,11 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 200));
       });
       await tester.pumpAndSettle();
+
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      });
+      await tester.pump();
 
       expect(find.text(defaultVault), findsOneWidget);
       expect(find.text('Vault location updated.'), findsNothing);

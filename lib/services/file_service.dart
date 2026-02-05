@@ -19,6 +19,7 @@ class _SectionRemoval {
 class FileService {
   static const _vaultPathKey = 'custom_vault_path';
   static FileService? _instance;
+  static Future<void>? _initFuture;
   late String _rootDir;
 
   FileService._();
@@ -26,7 +27,10 @@ class FileService {
   static Future<FileService> getInstance() async {
     if (_instance == null) {
       _instance = FileService._();
-      await _instance!._init();
+      _initFuture = _instance!._init();
+    }
+    if (_initFuture != null) {
+      await _initFuture;
     }
     return _instance!;
   }
@@ -77,7 +81,10 @@ class FileService {
   }
 
   @visibleForTesting
-  static void resetInstance() => _instance = null;
+  static void resetInstance() {
+    _instance = null;
+    _initFuture = null;
+  }
 
   String get rootDir => _rootDir;
 

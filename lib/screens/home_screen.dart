@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/log_entry.dart';
@@ -9,7 +10,6 @@ import '../theme/lila_theme.dart';
 import '../widgets/armed_swipe_to_delete.dart';
 import '../widgets/log_bottom_sheet.dart';
 import 'daily_detail_screen.dart';
-import 'daily_reflection_screen.dart';
 import 'intention_flow_screen.dart';
 import 'settings_screen.dart';
 import 'trash_screen.dart';
@@ -29,6 +29,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String _dailyReflection = '';
   FocusState _focusState = FocusState.defaultState();
   bool _focusLoading = true;
+  bool _reflectionLoaded = false;
+  bool _isLoggingReflection = false;
 
   static const _modeAssets = {
     Mode.nourishment: 'assets/icons/nourishment.png',
@@ -36,6 +38,12 @@ class _HomeScreenState extends State<HomeScreen> {
     Mode.maintenance: 'assets/icons/maintenence.png',
     Mode.drift: 'assets/icons/drift.png',
   };
+
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _reflectionSectionKey = GlobalKey();
+  final TextEditingController _reflectionController = TextEditingController();
+  final FocusNode _reflectionFocusNode = FocusNode();
+  Timer? _reflectionSaveTimer;
 
   @override
   void initState() {
@@ -49,6 +57,11 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     widget.focusController.removeListener(_handleFocusChange);
+    _reflectionSaveTimer?.cancel();
+    _saveReflectionNow();
+    _reflectionController.dispose();
+    _reflectionFocusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -58,9 +71,15 @@ class _HomeScreenState extends State<HomeScreen> {
     final entries = await fs.readDailyEntries(now);
     final reflection = await fs.readDailyReflection(now);
     if (mounted) {
+      final previousReflection = _dailyReflection;
       setState(() {
         _todayEntries = entries;
         _dailyReflection = reflection;
+        if (!_reflectionLoaded ||
+            _reflectionController.text == previousReflection) {
+          _reflectionController.text = reflection;
+          _reflectionLoaded = true;
+        }
       });
     }
   }
@@ -83,6 +102,59 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) => LogBottomSheet(onLogged: _loadEntries),
     );
+  }
+
+  void _scrollToReflection() {
+    final targetContext = _reflectionSectionKey.currentContext;
+    if (targetContext != null) {
+      Scrollable.ensureVisible(
+        targetContext,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOut,
+        alignment: 0.1,
+      );
+    }
+  }
+
+  void _onReflectionChanged(String text) {
+    setState(() {
+      _dailyReflection = text;
+    });
+    _reflectionSaveTimer?.cancel();
+    _reflectionSaveTimer =
+        Timer(const Duration(seconds: 1), _saveReflectionNow);
+  }
+
+  Future<void> _saveReflectionNow() async {
+    final text = _reflectionController.text;
+    final fs = await FileService.getInstance();
+    await fs.saveDailyReflection(DateTime.now(), text);
+  }
+
+  Future<void> _logReflection() async {
+    if (_isLoggingReflection) return;
+    if (_reflectionController.text.trim().isEmpty) return;
+
+    setState(() {
+      _isLoggingReflection = true;
+      _dailyReflection = _reflectionController.text;
+    });
+    await _saveReflectionNow();
+
+    final entry = LogEntry(
+      label: 'Daily reflection',
+      mode: Mode.nourishment,
+      orientation: LogOrientation.self_,
+      timestamp: DateTime.now(),
+    );
+
+    final fs = await FileService.getInstance();
+    await fs.appendEntry(entry);
+
+    if (mounted) {
+      await _loadEntries();
+      setState(() => _isLoggingReflection = false);
+    }
   }
 
   Future<void> _openFocusFlow() async {
@@ -160,28 +232,6 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: GestureDetector(
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => DailyReflectionScreen(date: DateTime.now()),
-                  ),
-                ).then((_) => _loadEntries());
-              },
-              child: Container(
-                width: 54,
-                height: 54,
-                child: Icon(
-                  Icons.edit_note_outlined,
-                  color: iconForeground,
-                  size: 30,
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: GestureDetector(
-              onTap: () {
                 final now = DateTime.now();
                 final monday = now.subtract(Duration(days: now.weekday - 1));
                 final weekStart =
@@ -226,7 +276,9 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: SingleChildScrollView(
+        controller: _scrollController,
         padding: const EdgeInsets.symmetric(horizontal: 24),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -265,9 +317,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: _buildTodaySummary(),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
             ],
-            _buildDailyPrompt(),
+            _buildReflectionSection(),
             const SizedBox(height: 48),
           ],
         ),
@@ -348,25 +400,103 @@ class _HomeScreenState extends State<HomeScreen> {
       hour: DateTime.now().hour,
     );
 
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => DailyReflectionScreen(date: DateTime.now()),
-          ),
-        ).then((_) => _loadEntries());
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Text(
-          text,
-          style: TextStyle(
-            color: onSurface.withValues(alpha: 0.5),
-            fontSize: 14,
-            fontStyle: FontStyle.italic,
-          ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: onSurface.withValues(alpha: 0.5),
+          fontSize: 14,
+          fontStyle: FontStyle.italic,
         ),
+      ),
+    );
+  }
+
+  Widget _buildReflectionSection() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final onSurface = colorScheme.onSurface;
+    final radii = context.lilaRadii;
+    final theme = _focusTheme(_focusState.season);
+    final enabled = _reflectionController.text.trim().isNotEmpty &&
+        !_isLoggingReflection;
+
+    return Container(
+      key: _reflectionSectionKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildDailyPrompt(),
+          TextField(
+            key: const ValueKey('daily_reflection_input'),
+            controller: _reflectionController,
+            onChanged: _onReflectionChanged,
+            onTap: _scrollToReflection,
+            focusNode: _reflectionFocusNode,
+            maxLines: null,
+            minLines: 4,
+            style: TextStyle(
+              color: onSurface.withValues(alpha: 0.8),
+              fontSize: 15,
+              height: 1.6,
+            ),
+            decoration: InputDecoration(
+              hintText: 'How did today feel?',
+              hintStyle: TextStyle(
+                color: onSurface.withValues(alpha: 0.3),
+                fontStyle: FontStyle.italic,
+              ),
+              filled: true,
+              fillColor: colorScheme.surfaceVariant.withValues(alpha: 0.6),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(radii.medium),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.all(16),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              key: const ValueKey('log_reflection_button'),
+              onPressed: enabled ? _logReflection : null,
+              style: TextButton.styleFrom(
+                backgroundColor: enabled
+                    ? colorScheme.surfaceVariant
+                    : colorScheme.surfaceVariant.withValues(alpha: 0.4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(
+                    _focusState.season == FocusSeason.builder
+                        ? 8.0
+                        : radii.medium,
+                  ),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.edit_note_outlined,
+                    size: 18,
+                    color: theme.accent.withValues(alpha: enabled ? 0.9 : 0.4),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _isLoggingReflection ? 'Logging...' : 'Log Reflection',
+                    style: TextStyle(
+                      color: onSurface.withValues(alpha: enabled ? 0.8 : 0.4),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
