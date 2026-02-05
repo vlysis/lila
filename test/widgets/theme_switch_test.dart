@@ -24,7 +24,7 @@ void main() {
 
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(app.theme?.scaffoldBackgroundColor,
-        LilaTheme.sanctuary.scaffoldBackgroundColor);
+        LilaTheme.forSeason(FocusSeason.sanctuary).scaffoldBackgroundColor);
   });
 
   testWidgets('Theme uses explorer palette when in explorer',
@@ -45,7 +45,7 @@ void main() {
 
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(app.theme?.scaffoldBackgroundColor,
-        LilaTheme.explorer.scaffoldBackgroundColor);
+        LilaTheme.forSeason(FocusSeason.explorer).scaffoldBackgroundColor);
   });
 
   testWidgets('Theme uses anchor palette when in anchor',
@@ -66,7 +66,7 @@ void main() {
 
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(app.theme?.scaffoldBackgroundColor,
-        LilaTheme.anchor.scaffoldBackgroundColor);
+        LilaTheme.forSeason(FocusSeason.anchor).scaffoldBackgroundColor);
   });
 
   testWidgets('Theme switches when focus changes',
@@ -82,7 +82,7 @@ void main() {
     );
     var app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(app.theme?.scaffoldBackgroundColor,
-        LilaTheme.explorer.scaffoldBackgroundColor);
+        LilaTheme.forSeason(FocusSeason.explorer).scaffoldBackgroundColor);
 
     controller.update(const FocusState(
       season: FocusSeason.sanctuary,
@@ -93,6 +93,6 @@ void main() {
 
     app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(app.theme?.scaffoldBackgroundColor,
-        LilaTheme.sanctuary.scaffoldBackgroundColor);
+        LilaTheme.forSeason(FocusSeason.sanctuary).scaffoldBackgroundColor);
   });
 }

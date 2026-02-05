@@ -8,6 +8,9 @@ import 'package:lila/services/ai_integration_service.dart';
 import 'package:lila/services/ai_provider.dart';
 import 'package:lila/services/ai_usage_service.dart';
 import 'package:lila/services/claude_api_client.dart';
+import 'package:lila/services/focus_controller.dart';
+import 'package:lila/theme/lila_theme.dart';
+import 'package:lila/models/focus_state.dart';
 import 'dart:io';
 
 void main() {
@@ -89,8 +92,9 @@ void main() {
   });
 
   Widget buildApp() {
-    return const MaterialApp(
-      home: SettingsScreen(),
+    return MaterialApp(
+      theme: LilaTheme.forSeason(FocusSeason.explorer),
+      home: SettingsScreen(focusController: FocusController()),
     );
   }
 
@@ -108,12 +112,24 @@ void main() {
     testWidgets('displays section title', (tester) async {
       await pumpSettingsScreen(tester);
 
+      await tester.dragUntilVisible(
+        find.text('AI & Integrations'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
       expect(find.text('AI & Integrations'), findsOneWidget);
     });
 
     testWidgets('shows provider selector defaulting to Claude', (tester) async {
       await pumpSettingsScreen(tester);
 
+      await tester.dragUntilVisible(
+        find.text('Provider'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
       expect(find.text('Provider'), findsOneWidget);
       expect(find.text('Claude'), findsOneWidget);
     });
@@ -121,26 +137,52 @@ void main() {
     testWidgets('shows Claude integration toggle', (tester) async {
       await pumpSettingsScreen(tester);
 
+      await tester.dragUntilVisible(
+        find.text('AI integration'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
       expect(find.text('AI integration'), findsOneWidget);
-      expect(find.byType(Switch), findsOneWidget);
+      expect(find.byType(Switch), findsWidgets);
     });
 
     testWidgets('toggle is disabled when no API key', (tester) async {
       await pumpSettingsScreen(tester);
 
-      final switchWidget = tester.widget<Switch>(find.byType(Switch));
-      expect(switchWidget.onChanged, isNull);
+      await tester.dragUntilVisible(
+        find.text('AI integration'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      // The AI integration switch is the second one (after dark mode toggle)
+      final switches = tester.widgetList<Switch>(find.byType(Switch)).toList();
+      final aiSwitch = switches.last;
+      expect(aiSwitch.onChanged, isNull);
     });
 
     testWidgets('shows prompt to enter API key when none saved', (tester) async {
       await pumpSettingsScreen(tester);
 
+      await tester.dragUntilVisible(
+        find.text('Enter an API key below to enable.'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
       expect(find.text('Enter an API key below to enable.'), findsOneWidget);
     });
 
     testWidgets('shows API key input field', (tester) async {
       await pumpSettingsScreen(tester);
 
+      await tester.dragUntilVisible(
+        find.text('Save key'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
       // Should have a TextField for API key entry
       expect(find.byType(TextField), findsWidgets);
     });
@@ -148,6 +190,12 @@ void main() {
     testWidgets('shows Save key button', (tester) async {
       await pumpSettingsScreen(tester);
 
+      await tester.dragUntilVisible(
+        find.text('Save key'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
       expect(find.text('Save key'), findsOneWidget);
     });
   });
@@ -156,24 +204,20 @@ void main() {
     testWidgets('shows error for invalid key format', (tester) async {
       await pumpSettingsScreen(tester);
 
-      // Find the API key TextField (it's obscured)
-      final textField = find.byType(TextField).first;
-      await tester.dragUntilVisible(
-        textField,
-        find.byType(ListView),
-        const Offset(0, -200),
-      );
-      await tester.pumpAndSettle();
-      await tester.enterText(textField, 'invalid-key');
-      await tester.pumpAndSettle();
-
-      // Tap Save key
+      // Scroll to the Save key area first
       await tester.dragUntilVisible(
         find.text('Save key'),
         find.byType(ListView),
         const Offset(0, -200),
       );
       await tester.pumpAndSettle();
+
+      // Find the API key TextField (it's obscured)
+      final textField = find.byType(TextField).first;
+      await tester.enterText(textField, 'invalid-key');
+      await tester.pumpAndSettle();
+
+      // Tap Save key
       await tester.tap(find.text('Save key'));
       await tester.pumpAndSettle();
 
@@ -209,6 +253,13 @@ void main() {
     testWidgets('shows masked key display', (tester) async {
       await pumpSettingsScreen(tester);
 
+      await tester.dragUntilVisible(
+        find.text('AI & Integrations'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+
       // Should show masked key (last 4 chars)
       expect(find.textContaining('sk-ant-...'), findsOneWidget);
       expect(find.textContaining('ABCD'), findsOneWidget);
@@ -217,8 +268,16 @@ void main() {
     testWidgets('toggle is enabled when API key exists', (tester) async {
       await pumpSettingsScreen(tester);
 
-      final switchWidget = tester.widget<Switch>(find.byType(Switch));
-      expect(switchWidget.onChanged, isNotNull);
+      await tester.dragUntilVisible(
+        find.text('AI integration'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      // The AI integration switch is the second one (after dark mode toggle)
+      final switches = tester.widgetList<Switch>(find.byType(Switch)).toList();
+      final aiSwitch = switches.last;
+      expect(aiSwitch.onChanged, isNotNull);
     });
 
     testWidgets('shows Change key and Remove key buttons', (tester) async {
@@ -431,29 +490,34 @@ void main() {
       await pumpSettingsScreen(tester);
 
       await tester.dragUntilVisible(
-        find.byType(Switch),
+        find.text('AI integration'),
         find.byType(ListView),
         const Offset(0, -200),
       );
       await tester.pumpAndSettle();
-      final switchWidget = tester.widget<Switch>(find.byType(Switch));
-      expect(switchWidget.value, isFalse);
+      // The AI integration switch is the second one (after dark mode toggle)
+      final switches = tester.widgetList<Switch>(find.byType(Switch)).toList();
+      final aiSwitch = switches.last;
+      expect(aiSwitch.value, isFalse);
     });
 
     testWidgets('tapping toggle changes state', (tester) async {
       await pumpSettingsScreen(tester);
 
       await tester.dragUntilVisible(
-        find.byType(Switch),
+        find.text('AI integration'),
         find.byType(ListView),
         const Offset(0, -200),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(Switch));
+      // Tap the AI integration switch (the last one)
+      final switches = find.byType(Switch);
+      await tester.tap(switches.last);
       await tester.pumpAndSettle();
 
-      final switchWidget = tester.widget<Switch>(find.byType(Switch));
-      expect(switchWidget.value, isTrue);
+      final updatedSwitches = tester.widgetList<Switch>(find.byType(Switch)).toList();
+      final aiSwitch = updatedSwitches.last;
+      expect(aiSwitch.value, isTrue);
     });
   });
 }

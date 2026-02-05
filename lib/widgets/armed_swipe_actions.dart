@@ -149,7 +149,7 @@ class _ArmedSwipeActionsState extends State<ArmedSwipeActions>
       decoration: BoxDecoration(
         color: _revealed == _RevealSide.none
             ? Colors.transparent
-            : Colors.white.withValues(alpha: 0.03),
+            : context.lilaSurface.overlay.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(radii.medium),
         border: Border.all(color: borderColor),
       ),
@@ -275,14 +275,14 @@ class _ArmedSwipeActionsState extends State<ArmedSwipeActions>
         children: [
           Icon(
             icon,
-            color: Colors.white.withValues(alpha: 0.7),
+            color: context.lilaSurface.textSecondary,
             size: 16,
           ),
           const SizedBox(width: 6),
           Text(
             label,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.7),
+              color: context.lilaSurface.textSecondary,
               fontSize: 12,
             ),
           ),

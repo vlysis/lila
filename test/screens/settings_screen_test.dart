@@ -10,6 +10,9 @@ import 'package:lila/services/ai_integration_service.dart';
 import 'package:lila/services/ai_usage_service.dart';
 import 'package:lila/services/ai_provider.dart';
 import 'package:lila/services/claude_api_client.dart';
+import 'package:lila/services/focus_controller.dart';
+import 'package:lila/theme/lila_theme.dart';
+import 'package:lila/models/focus_state.dart';
 
 /// Fake [FilePicker] that returns a predetermined directory path.
 class FakeFilePicker extends FilePicker {
@@ -89,7 +92,8 @@ void main() {
 
   Widget buildApp() {
     return MaterialApp(
-      home: const SettingsScreen(),
+      theme: LilaTheme.forSeason(FocusSeason.explorer),
+      home: SettingsScreen(focusController: FocusController()),
     );
   }
 

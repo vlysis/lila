@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../models/focus_state.dart';
 import '../services/focus_controller.dart';
 import '../services/intention_service.dart';
+import '../theme/lila_theme.dart';
 
 class IntentionFlowScreen extends StatefulWidget {
   final FocusState? initialState;
@@ -71,6 +72,43 @@ class _IntentionFlowScreenState extends State<IntentionFlowScreen>
   bool get _hasIntention => _intentionController.text.trim().isNotEmpty;
 
   _FlowTheme _themeFor(FocusSeason season) {
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    if (isLight) {
+      switch (season) {
+        case FocusSeason.builder:
+          return const _FlowTheme(
+            surface: Color(0xFFECEAE6),
+            border: Color(0xFFB0CED4),
+            accent: Color(0xFFB8962E),
+            muted: Color(0xFF8AAFB4),
+            radius: 12,
+          );
+        case FocusSeason.sanctuary:
+          return const _FlowTheme(
+            surface: Color(0xFFF0EBE5),
+            border: Color(0xFFA3C2A8),
+            accent: Color(0xFF925D46),
+            muted: Color(0xFFA0A898),
+            radius: 20,
+          );
+        case FocusSeason.explorer:
+          return const _FlowTheme(
+            surface: Color(0xFFF2EDE8),
+            border: Color(0xFFD4A890),
+            accent: Color(0xFFC27840),
+            muted: Color(0xFF9468BE),
+            radius: 18,
+          );
+        case FocusSeason.anchor:
+          return const _FlowTheme(
+            surface: Color(0xFFE6EAF0),
+            border: Color(0xFFAAB8C8),
+            accent: Color(0xFF7A8DA0),
+            muted: Color(0xFF8A97AA),
+            radius: 10,
+          );
+      }
+    }
     switch (season) {
       case FocusSeason.builder:
         return const _FlowTheme(
@@ -288,6 +326,7 @@ class _IntentionFlowScreenState extends State<IntentionFlowScreen>
     FocusSeason season, {
     bool fullWidth = false,
   }) {
+    final s = context.lilaSurface;
     final isSelected = _selectedSeason == season;
     final theme = _themeFor(season);
     final radius = _seasonCardRadius(season, theme);
@@ -375,7 +414,7 @@ class _IntentionFlowScreenState extends State<IntentionFlowScreen>
                   Text(
                     season.title,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.9),
+                      color: s.text,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                     ),
@@ -384,7 +423,7 @@ class _IntentionFlowScreenState extends State<IntentionFlowScreen>
                   Text(
                     season.label,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.45),
+                      color: s.textMuted,
                       fontSize: 12,
                     ),
                   ),
@@ -428,6 +467,7 @@ class _IntentionFlowScreenState extends State<IntentionFlowScreen>
   }
 
   Widget _buildCommitment(_FlowTheme theme, FocusSeason season) {
+    final s = context.lilaSurface;
     final heading = switch (season) {
       FocusSeason.builder => 'Define your focus',
       FocusSeason.sanctuary => 'Define your boundary',
@@ -452,7 +492,7 @@ class _IntentionFlowScreenState extends State<IntentionFlowScreen>
         Text(
           heading,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.6),
+            color: s.textSecondary,
             fontSize: 14,
             letterSpacing: 0.4,
           ),
@@ -461,7 +501,7 @@ class _IntentionFlowScreenState extends State<IntentionFlowScreen>
         Text(
           description,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.4),
+            color: s.textMuted,
             fontSize: 13,
           ),
         ),
@@ -473,14 +513,14 @@ class _IntentionFlowScreenState extends State<IntentionFlowScreen>
           minLines: 2,
           maxLines: 3,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.85),
+            color: s.text,
             fontSize: 15,
             height: 1.5,
           ),
           decoration: InputDecoration(
             hintText: season.prompt,
             hintStyle: TextStyle(
-              color: Colors.white.withValues(alpha: 0.25),
+              color: s.textFaint,
               fontStyle: FontStyle.italic,
             ),
             filled: true,
@@ -511,6 +551,7 @@ class _IntentionFlowScreenState extends State<IntentionFlowScreen>
   }
 
   Widget _buildConfirm(_FlowTheme theme) {
+    final s = context.lilaSurface;
     final enabled = !_saving;
     return Column(
       key: const ValueKey('confirm_section'),
@@ -542,7 +583,7 @@ class _IntentionFlowScreenState extends State<IntentionFlowScreen>
             child: Text(
               'Applied',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.7),
+                color: s.textSecondary,
                 fontSize: 12,
                 letterSpacing: 0.3,
               ),
@@ -585,7 +626,7 @@ class _IntentionFlowScreenState extends State<IntentionFlowScreen>
                 ),
                 child: Icon(
                   Icons.touch_app_outlined,
-                  color: Colors.white.withValues(alpha: enabled ? 0.75 : 0.35),
+                  color: s.textSecondary.withValues(alpha: enabled ? 1.0 : 0.5),
                   size: 28,
                 ),
               ),
@@ -596,7 +637,7 @@ class _IntentionFlowScreenState extends State<IntentionFlowScreen>
         Text(
           _hasIntention ? 'Hold to confirm' : 'Hold to confirm (optional)',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: enabled ? 0.5 : 0.35),
+            color: s.textMuted.withValues(alpha: enabled ? 1.0 : 0.7),
             fontSize: 12,
             letterSpacing: 0.3,
           ),
