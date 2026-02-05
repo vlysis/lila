@@ -210,7 +210,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: GestureDetector(
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                MaterialPageRoute(builder: (_) => SettingsScreen(focusController: widget.focusController)),
               ).then((_) => _loadEntries()),
               child: Container(
                 width: 54,
@@ -302,7 +302,7 @@ class _HomeScreenState extends State<HomeScreen> {
               border: Border.all(color: borderColor),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.12),
+                  color: context.lilaSurface.shadow,
                   blurRadius: 10,
                   offset: const Offset(0, 6),
                 ),
@@ -514,35 +514,64 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   _FocusTheme _focusTheme(FocusSeason season) {
+    final isLight = Theme.of(context).brightness == Brightness.light;
     switch (season) {
       case FocusSeason.builder:
-        return const _FocusTheme(
-          surface: Color(0xFF151C1E),
-          border: Color(0xFF2A474D),
-          accent: Color(0xFFD6B25E),
-          radius: 12,
-        );
+        return isLight
+            ? const _FocusTheme(
+                surface: Color(0xFFECEAE6),
+                border: Color(0xFFB0CED4),
+                accent: Color(0xFFB8962E),
+                radius: 12,
+              )
+            : const _FocusTheme(
+                surface: Color(0xFF151C1E),
+                border: Color(0xFF2A474D),
+                accent: Color(0xFFD6B25E),
+                radius: 12,
+              );
       case FocusSeason.sanctuary:
-        return const _FocusTheme(
-          surface: Color(0xFF2B2723),
-          border: Color(0xFF6D8570),
-          accent: Color(0xFFB07A63),
-          radius: 20,
-        );
+        return isLight
+            ? const _FocusTheme(
+                surface: Color(0xFFF0EBE5),
+                border: Color(0xFFA3C2A8),
+                accent: Color(0xFF925D46),
+                radius: 20,
+              )
+            : const _FocusTheme(
+                surface: Color(0xFF2B2723),
+                border: Color(0xFF6D8570),
+                accent: Color(0xFFB07A63),
+                radius: 20,
+              );
       case FocusSeason.explorer:
-        return const _FocusTheme(
-          surface: Color(0xFF1E1A1A),
-          border: Color(0xFF3D2F3A),
-          accent: Color(0xFFE38B4F),
-          radius: 18,
-        );
+        return isLight
+            ? const _FocusTheme(
+                surface: Color(0xFFF2EDE8),
+                border: Color(0xFFD4A890),
+                accent: Color(0xFFC27840),
+                radius: 18,
+              )
+            : const _FocusTheme(
+                surface: Color(0xFF1E1A1A),
+                border: Color(0xFF3D2F3A),
+                accent: Color(0xFFE38B4F),
+                radius: 18,
+              );
       case FocusSeason.anchor:
-        return const _FocusTheme(
-          surface: Color(0xFF1A202C),
-          border: Color(0xFF4A5568),
-          accent: Color(0xFFA0AEC0),
-          radius: 10,
-        );
+        return isLight
+            ? const _FocusTheme(
+                surface: Color(0xFFE6EAF0),
+                border: Color(0xFFAAB8C8),
+                accent: Color(0xFF7A8DA0),
+                radius: 10,
+              )
+            : const _FocusTheme(
+                surface: Color(0xFF1A202C),
+                border: Color(0xFF4A5568),
+                accent: Color(0xFFA0AEC0),
+                radius: 10,
+              );
     }
   }
 

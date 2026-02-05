@@ -5,6 +5,7 @@ import '../models/log_entry.dart';
 import '../services/ai_api_types.dart';
 import '../services/ai_chat_client.dart';
 import '../services/file_service.dart';
+import '../theme/lila_theme.dart';
 
 /// A chat message in the discussion.
 class _ChatMessage {
@@ -244,6 +245,8 @@ Ask thoughtful questions. Make gentle observations. Keep responses concise (2-3 
 
   @override
   Widget build(BuildContext context) {
+    final s = context.lilaSurface;
+    final colorScheme = Theme.of(context).colorScheme;
     return DraggableScrollableSheet(
       initialChildSize: 0.6,
       minChildSize: 0.4,
@@ -256,9 +259,9 @@ Ask thoughtful questions. Make gentle observations. Keep responses concise (2-3 
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
           child: Container(
-            decoration: const BoxDecoration(
-              color: Color(0xFF1A1A1A),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: Column(
               children: [
@@ -269,7 +272,7 @@ Ask thoughtful questions. Make gentle observations. Keep responses concise (2-3 
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
+                      color: s.borderSubtle,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -283,7 +286,7 @@ Ask thoughtful questions. Make gentle observations. Keep responses concise (2-3 
                       Text(
                         'Discuss your day',
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.9),
+                          color: s.text,
                           fontSize: 18,
                           fontWeight: FontWeight.w500,
                         ),
@@ -291,20 +294,20 @@ Ask thoughtful questions. Make gentle observations. Keep responses concise (2-3 
                       IconButton(
                         icon: Icon(
                           Icons.close,
-                          color: Colors.white.withValues(alpha: 0.5),
+                          color: s.textMuted,
                         ),
                         onPressed: () => Navigator.pop(context),
                       ),
                     ],
                   ),
                 ),
-                const Divider(color: Color(0xFF2A2A2A), height: 1),
+                Divider(color: colorScheme.outline.withValues(alpha: 0.3), height: 1),
                 // Messages
                 Expanded(
                   child: _loading
-                      ? const Center(
+                      ? Center(
                           child: CircularProgressIndicator(
-                            color: Color(0xFF7B9EA8),
+                            color: colorScheme.primary,
                             strokeWidth: 2,
                           ),
                         )
@@ -344,6 +347,7 @@ Ask thoughtful questions. Make gentle observations. Keep responses concise (2-3 
   }
 
   Widget _buildEmptyState() {
+    final s = context.lilaSurface;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -353,14 +357,14 @@ Ask thoughtful questions. Make gentle observations. Keep responses concise (2-3 
             Icon(
               Icons.chat_bubble_outline,
               size: 48,
-              color: Colors.white.withValues(alpha: 0.15),
+              color: s.textFaint,
             ),
             const SizedBox(height: 16),
             Text(
               'Start a conversation about your day',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.4),
+                color: s.textMuted,
                 fontSize: 15,
               ),
             ),
@@ -371,6 +375,7 @@ Ask thoughtful questions. Make gentle observations. Keep responses concise (2-3 
   }
 
   Widget _buildMessageBubble(_ChatMessage message) {
+    final s = context.lilaSurface;
     final isUser = message.role == 'user';
 
     return Align(
@@ -383,14 +388,14 @@ Ask thoughtful questions. Make gentle observations. Keep responses concise (2-3 
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: isUser
-              ? Colors.white.withValues(alpha: 0.08)
+              ? s.overlay
               : const Color(0xFF6B8F71).withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Text(
           message.content,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.85),
+            color: s.text,
             fontSize: 15,
             height: 1.4,
           ),
@@ -424,6 +429,7 @@ Ask thoughtful questions. Make gentle observations. Keep responses concise (2-3 
   }
 
   Widget _buildDot(int index) {
+    final s = context.lilaSurface;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.3, end: 1.0),
       duration: Duration(milliseconds: 400 + (index * 150)),
@@ -433,7 +439,7 @@ Ask thoughtful questions. Make gentle observations. Keep responses concise (2-3 
           width: 8,
           height: 8,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: value * 0.5),
+            color: s.textMuted.withValues(alpha: value * 0.8),
             shape: BoxShape.circle,
           ),
         );
@@ -442,6 +448,7 @@ Ask thoughtful questions. Make gentle observations. Keep responses concise (2-3 
   }
 
   Widget _buildErrorMessage() {
+    final s = context.lilaSurface;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -461,7 +468,7 @@ Ask thoughtful questions. Make gentle observations. Keep responses concise (2-3 
             child: Text(
               _errorMessage!,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.7),
+                color: s.textSecondary,
                 fontSize: 13,
               ),
             ),
@@ -489,12 +496,14 @@ Ask thoughtful questions. Make gentle observations. Keep responses concise (2-3 
   }
 
   Widget _buildInputArea() {
+    final s = context.lilaSurface;
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A1A1A),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
         border: Border(
-          top: BorderSide(color: Color(0xFF2A2A2A), width: 1),
+          top: BorderSide(color: colorScheme.outline.withValues(alpha: 0.3), width: 1),
         ),
       ),
       child: Row(
@@ -508,16 +517,16 @@ Ask thoughtful questions. Make gentle observations. Keep responses concise (2-3 
               minLines: 1,
               textCapitalization: TextCapitalization.sentences,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.85),
+                color: s.text,
                 fontSize: 15,
               ),
               decoration: InputDecoration(
                 hintText: "What's on your mind?",
                 hintStyle: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.25),
+                  color: s.textFaint,
                 ),
                 filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.04),
+                fillColor: s.overlay.withValues(alpha: 0.04),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
                   borderSide: BorderSide.none,
@@ -538,7 +547,7 @@ Ask thoughtful questions. Make gentle observations. Keep responses concise (2-3 
               icon: Icon(
                 Icons.arrow_upward,
                 color: _sending
-                    ? Colors.white.withValues(alpha: 0.3)
+                    ? s.textFaint
                     : Colors.white,
                 size: 20,
               ),

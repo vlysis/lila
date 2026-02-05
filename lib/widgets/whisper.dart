@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/log_entry.dart';
+import '../theme/lila_theme.dart';
 
 class WhisperWidget extends StatelessWidget {
   final List<LogEntry> todayEntries;
@@ -62,7 +63,7 @@ class WhisperWidget extends StatelessWidget {
       child: Text(
         whisper,
         style: TextStyle(
-          color: Colors.white.withValues(alpha: 0.5),
+          color: context.lilaSurface.textMuted,
           fontSize: 14,
           fontStyle: FontStyle.italic,
         ),

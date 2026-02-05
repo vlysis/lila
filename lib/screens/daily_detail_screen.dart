@@ -117,7 +117,7 @@ class _DailyDetailScreenState extends State<DailyDetailScreen> {
                     const SizedBox(width: 8),
                     _buildBadge(
                       entry.orientation.label,
-                      Colors.white.withValues(alpha: 0.4),
+                      context.lilaSurface.textMuted,
                     ),
                   ],
                 ),
