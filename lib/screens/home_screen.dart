@@ -13,6 +13,7 @@ import 'daily_detail_screen.dart';
 import 'intention_flow_screen.dart';
 import 'settings_screen.dart';
 import 'trash_screen.dart';
+import 'visualization_screen.dart';
 import 'weekly_review_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -228,6 +229,28 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const VisualizationScreen(),
+                  ),
+                ).then((_) => _loadEntries());
+              },
+              child: Container(
+                width: 54,
+                height: 54,
+                child: Icon(
+                  Icons.local_florist_outlined,
+                  color: iconForeground,
+                  size: 30,
+                ),
+              ),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: GestureDetector(
