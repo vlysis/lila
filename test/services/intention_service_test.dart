@@ -56,7 +56,7 @@ void main() {
     final service = await IntentionService.getInstance();
     final current = await service.readCurrent();
 
-    expect(current.season, FocusSeason.builder);
+    expect(current.season, FocusSeason.explorer);
     expect(current.intention, isEmpty);
     expect(current.setAt, isNull);
   });

@@ -28,6 +28,7 @@ class _IntentionFlowScreenState extends State<IntentionFlowScreen>
   late final TextEditingController _intentionController;
   late final AnimationController _holdController;
   late final AnimationController _appliedController;
+  late final AnimationController _explorerGradientController;
   Timer? _hapticTimer;
   bool _saving = false;
 
@@ -50,6 +51,11 @@ class _IntentionFlowScreenState extends State<IntentionFlowScreen>
       vsync: this,
       duration: const Duration(milliseconds: 520),
     );
+    _explorerGradientController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 18),
+    );
+    _syncExplorerMotion(_selectedSeason);
   }
 
   @override
@@ -57,6 +63,7 @@ class _IntentionFlowScreenState extends State<IntentionFlowScreen>
     _hapticTimer?.cancel();
     _holdController.dispose();
     _appliedController.dispose();
+    _explorerGradientController.dispose();
     _intentionController.dispose();
     super.dispose();
   }
@@ -80,6 +87,22 @@ class _IntentionFlowScreenState extends State<IntentionFlowScreen>
           accent: Color(0xFFB07A63),
           muted: Color(0xFF7A7F72),
           radius: 20,
+        );
+      case FocusSeason.explorer:
+        return const _FlowTheme(
+          surface: Color(0xFF1E1A1A),
+          border: Color(0xFF3D2F3A),
+          accent: Color(0xFFE38B4F),
+          muted: Color(0xFFB18AD9),
+          radius: 18,
+        );
+      case FocusSeason.anchor:
+        return const _FlowTheme(
+          surface: Color(0xFF1A202C),
+          border: Color(0xFF4A5568),
+          accent: Color(0xFFA0AEC0),
+          muted: Color(0xFF718096),
+          radius: 10,
         );
     }
   }
@@ -126,6 +149,19 @@ class _IntentionFlowScreenState extends State<IntentionFlowScreen>
 
   void _showAppliedPulse() {
     _appliedController.forward(from: 0);
+  }
+
+  void _syncExplorerMotion(FocusSeason? season) {
+    if (season == FocusSeason.explorer) {
+      if (!_explorerGradientController.isAnimating) {
+        _explorerGradientController.repeat(reverse: true);
+      }
+    } else {
+      if (_explorerGradientController.isAnimating) {
+        _explorerGradientController.stop();
+      }
+      _explorerGradientController.value = 0;
+    }
   }
 
   void _scheduleHaptic() {
@@ -198,11 +234,31 @@ class _IntentionFlowScreenState extends State<IntentionFlowScreen>
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Row(
+                  Column(
                     children: [
-                      _buildSeasonOption(FocusSeason.builder),
-                      const SizedBox(width: 16),
-                      _buildSeasonOption(FocusSeason.sanctuary),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildSeasonOption(FocusSeason.builder),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildSeasonOption(FocusSeason.sanctuary),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildSeasonOption(FocusSeason.explorer),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildSeasonOption(FocusSeason.anchor),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                   const SizedBox(height: 28),
@@ -228,85 +284,173 @@ class _IntentionFlowScreenState extends State<IntentionFlowScreen>
     );
   }
 
-  Widget _buildSeasonOption(FocusSeason season) {
+  Widget _buildSeasonOption(
+    FocusSeason season, {
+    bool fullWidth = false,
+  }) {
     final isSelected = _selectedSeason == season;
     final theme = _themeFor(season);
+    final radius = _seasonCardRadius(season, theme);
+    final iconRadius = _seasonIconRadius(season);
+    final borderWidth = season == FocusSeason.anchor ? 2.2 : (isSelected ? 1.4 : 1.0);
 
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          setState(() => _selectedSeason = season);
-          final state = FocusState(
-            season: season,
-            intention: _intentionController.text.trim(),
-            setAt: DateTime.now(),
-          );
-          _applyState(state);
-          _showAppliedPulse();
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          height: 140,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: theme.surface.withValues(alpha: isSelected ? 0.9 : 0.5),
-            borderRadius: BorderRadius.circular(theme.radius + 8),
-            border: Border.all(
-              color: theme.border.withValues(alpha: isSelected ? 0.8 : 0.3),
-              width: isSelected ? 1.4 : 1,
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _selectedSeason = season);
+        _syncExplorerMotion(season);
+        final state = FocusState(
+          season: season,
+          intention: _intentionController.text.trim(),
+          setAt: DateTime.now(),
+        );
+        _applyState(state);
+        _showAppliedPulse();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        height: 140,
+        width: fullWidth ? double.infinity : null,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: theme.surface.withValues(alpha: isSelected ? 0.9 : 0.5),
+          borderRadius: radius,
+          border: Border.all(
+            color: theme.border.withValues(alpha: isSelected ? 0.8 : 0.3),
+            width: borderWidth,
+          ),
+        ),
+        child: Stack(
+          children: [
+            if (season == FocusSeason.explorer)
+              Positioned.fill(
+                child: AnimatedBuilder(
+                  animation: _explorerGradientController,
+                  builder: (context, _) {
+                    final shift = lerpDouble(
+                      -0.5,
+                      0.5,
+                      _explorerGradientController.value,
+                    )!;
+                    return DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment(-1 + shift, -0.8),
+                          end: Alignment(1 - shift, 0.8),
+                          colors: [
+                            const Color(0xFFE38B4F)
+                                .withValues(alpha: 0.12),
+                            const Color(0xFFB18AD9)
+                                .withValues(alpha: 0.12),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: theme.accent.withValues(alpha: 0.18),
+                      borderRadius: iconRadius,
+                    ),
+                    child: Icon(
+                      switch (season) {
+                        FocusSeason.builder => Icons.wb_sunny_outlined,
+                        FocusSeason.sanctuary => Icons.nightlight_outlined,
+                        FocusSeason.explorer => Icons.explore_outlined,
+                        FocusSeason.anchor => Icons.anchor_outlined,
+                      },
+                      color: theme.accent.withValues(alpha: 0.9),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    season.title,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    season.label,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.45),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: theme.accent.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Icon(
-                  season == FocusSeason.builder
-                      ? Icons.wb_sunny_outlined
-                      : Icons.nightlight_outlined,
-                  color: theme.accent.withValues(alpha: 0.9),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                season == FocusSeason.builder ? 'Builder' : 'Sanctuary',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                season.label,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.45),
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );
   }
 
+  BorderRadius _seasonCardRadius(FocusSeason season, _FlowTheme theme) {
+    if (season == FocusSeason.explorer) {
+      return const BorderRadius.only(
+        topLeft: Radius.circular(22),
+        topRight: Radius.circular(30),
+        bottomRight: Radius.circular(16),
+        bottomLeft: Radius.circular(26),
+      );
+    }
+    if (season == FocusSeason.anchor || season == FocusSeason.builder) {
+      return BorderRadius.circular(6);
+    }
+    return BorderRadius.circular(theme.radius + 8);
+  }
+
+  BorderRadius _seasonIconRadius(FocusSeason season) {
+    if (season == FocusSeason.explorer) {
+      return const BorderRadius.only(
+        topLeft: Radius.circular(12),
+        topRight: Radius.circular(18),
+        bottomRight: Radius.circular(10),
+        bottomLeft: Radius.circular(16),
+      );
+    }
+    if (season == FocusSeason.anchor) {
+      return BorderRadius.circular(6);
+    }
+    return BorderRadius.circular(18);
+  }
+
   Widget _buildCommitment(_FlowTheme theme, FocusSeason season) {
+    final heading = switch (season) {
+      FocusSeason.builder => 'Define your focus',
+      FocusSeason.sanctuary => 'Define your boundary',
+      FocusSeason.explorer => 'Define your curiosity',
+      FocusSeason.anchor => 'Define your baseline',
+    };
+    final description = switch (season) {
+      FocusSeason.builder =>
+        'What one project or skill is your priority for this season?',
+      FocusSeason.sanctuary =>
+        'What activity or stressor are you giving yourself permission to ignore?',
+      FocusSeason.explorer =>
+        'What are you exploring or wandering toward right now?',
+      FocusSeason.anchor =>
+        'Which non-negotiables are you keeping steady right now?',
+    };
+
     return Column(
       key: ValueKey('commitment_${season.storageValue}'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          season == FocusSeason.builder
-              ? 'Define your focus'
-              : 'Define your boundary',
+          heading,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.6),
             fontSize: 14,
@@ -315,9 +459,7 @@ class _IntentionFlowScreenState extends State<IntentionFlowScreen>
         ),
         const SizedBox(height: 10),
         Text(
-          season == FocusSeason.builder
-              ? 'What one project or skill is your priority for this season?'
-              : 'What activity or stressor are you giving yourself permission to ignore?',
+          description,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.4),
             fontSize: 13,

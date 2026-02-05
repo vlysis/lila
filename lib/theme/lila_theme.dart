@@ -17,6 +17,8 @@ class LilaRadii extends ThemeExtension<LilaRadii> {
 
   static const builder = LilaRadii(small: 8, medium: 12, large: 20);
   static const sanctuary = LilaRadii(small: 12, medium: 18, large: 26);
+  static const explorer = LilaRadii(small: 10, medium: 16, large: 24);
+  static const anchor = LilaRadii(small: 6, medium: 10, large: 14);
 
   @override
   LilaRadii copyWith({double? small, double? medium, double? large}) {
@@ -76,6 +78,26 @@ class LilaPalette extends ThemeExtension<LilaPalette> {
     selfOrientation: Color(0xFFA59AC9),
     mutualOrientation: Color(0xFF7DA79B),
     otherOrientation: Color(0xFFB07A63),
+  );
+
+  static const explorer = LilaPalette(
+    nourishment: Color(0xFFE09768),
+    growth: Color(0xFFB18AD9),
+    maintenance: Color(0xFFC38A73),
+    drift: Color(0xFF8E6E99),
+    selfOrientation: Color(0xFFC7A4E6),
+    mutualOrientation: Color(0xFFB9948D),
+    otherOrientation: Color(0xFFD28B77),
+  );
+
+  static const anchor = LilaPalette(
+    nourishment: Color(0xFF4A5568),
+    growth: Color(0xFF5A6B78),
+    maintenance: Color(0xFFA0AEC0),
+    drift: Color(0xFF3C4858),
+    selfOrientation: Color(0xFF7A8799),
+    mutualOrientation: Color(0xFF8793A6),
+    otherOrientation: Color(0xFF6E7A8C),
   );
 
   Color modeColor(Mode mode) {
@@ -149,7 +171,16 @@ extension LilaThemeX on BuildContext {
 
 class LilaTheme {
   static ThemeData forSeason(FocusSeason season) {
-    return season == FocusSeason.sanctuary ? sanctuary : builder;
+    switch (season) {
+      case FocusSeason.sanctuary:
+        return sanctuary;
+      case FocusSeason.explorer:
+        return explorer;
+      case FocusSeason.anchor:
+        return anchor;
+      case FocusSeason.builder:
+        return builder;
+    }
   }
 
   static ThemeData get builder {
@@ -188,6 +219,44 @@ class LilaTheme {
     );
   }
 
+  static ThemeData get explorer {
+    return _buildTheme(
+      scaffold: const Color(0xFF1A1616),
+      surface: const Color(0xFF1E1A1A),
+      surfaceVariant: const Color(0xFF2B2128),
+      primary: const Color(0xFFE38B4F),
+      secondary: const Color(0xFFB18AD9),
+      tertiary: const Color(0xFFD9A48F),
+      onSurface: const Color(0xFFE9DDD2),
+      onSurfaceVariant: const Color(0xFFC8B9AD),
+      outline: const Color(0xFF3D2F3A),
+      radii: LilaRadii.explorer,
+      palette: LilaPalette.explorer,
+      pillFontWeight: FontWeight.w400,
+      pillLetterSpacing: 0.2,
+    );
+  }
+
+  static ThemeData get anchor {
+    return _buildTheme(
+      scaffold: const Color(0xFF141821),
+      surface: const Color(0xFF1A202C),
+      surfaceVariant: const Color(0xFF242C3A),
+      primary: const Color(0xFFA0AEC0),
+      secondary: const Color(0xFF718096),
+      tertiary: const Color(0xFF8F9BAE),
+      onSurface: const Color(0xFFE2E8F0),
+      onSurfaceVariant: const Color(0xFFB9C3D1),
+      outline: const Color(0xFF4A5568),
+      radii: LilaRadii.anchor,
+      palette: LilaPalette.anchor,
+      pillFontWeight: FontWeight.w500,
+      pillLetterSpacing: 0.2,
+      fontFamily: 'Roboto Slab',
+      fontFamilyFallback: const ['Roboto'],
+    );
+  }
+
   static ThemeData _buildTheme({
     required Color scaffold,
     required Color surface,
@@ -202,10 +271,13 @@ class LilaTheme {
     required LilaPalette palette,
     required FontWeight pillFontWeight,
     required double pillLetterSpacing,
+    String fontFamily = 'Roboto',
+    List<String> fontFamilyFallback = const [],
   }) {
     final base = ThemeData(
       brightness: Brightness.dark,
-      fontFamily: 'Roboto',
+      fontFamily: fontFamily,
+      fontFamilyFallback: fontFamilyFallback,
       useMaterial3: false,
     );
 

@@ -34,8 +34,8 @@ class IntentionService {
     final setAtValue = _readValue(content, 'set_at');
 
     final season = seasonValue != null
-        ? FocusSeason.fromStorage(seasonValue) ?? FocusSeason.builder
-        : FocusSeason.builder;
+        ? FocusSeason.fromStorage(seasonValue) ?? FocusSeason.explorer
+        : FocusSeason.explorer;
     final setAt = setAtValue != null ? DateTime.tryParse(setAtValue) : null;
 
     return FocusState(

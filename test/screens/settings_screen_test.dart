@@ -126,6 +126,16 @@ void main() {
     expect(find.text('Change'), findsOneWidget);
   });
 
+  testWidgets('displays Backup vault button', (tester) async {
+    await pumpSettingsScreen(tester);
+    expect(find.text('Backup vault'), findsOneWidget);
+  });
+
+  testWidgets('displays Restore vault button', (tester) async {
+    await pumpSettingsScreen(tester);
+    expect(find.text('Restore vault'), findsOneWidget);
+  });
+
   group('bottom sheet', () {
     testWidgets('tapping Change shows bottom sheet with two options',
         (tester) async {

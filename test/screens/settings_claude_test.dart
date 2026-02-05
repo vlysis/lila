@@ -158,10 +158,22 @@ void main() {
 
       // Find the API key TextField (it's obscured)
       final textField = find.byType(TextField).first;
+      await tester.dragUntilVisible(
+        textField,
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
       await tester.enterText(textField, 'invalid-key');
       await tester.pumpAndSettle();
 
       // Tap Save key
+      await tester.dragUntilVisible(
+        find.text('Save key'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Save key'));
       await tester.pumpAndSettle();
 
@@ -173,6 +185,12 @@ void main() {
       await pumpSettingsScreen(tester);
 
       // Tap Save key without entering anything
+      await tester.dragUntilVisible(
+        find.text('Save key'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Save key'));
       await tester.pumpAndSettle();
 
@@ -206,6 +224,13 @@ void main() {
     testWidgets('shows Change key and Remove key buttons', (tester) async {
       await pumpSettingsScreen(tester);
 
+      await tester.dragUntilVisible(
+        find.text('Remove key'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+
       expect(find.text('Change key'), findsOneWidget);
       expect(find.text('Remove key'), findsOneWidget);
     });
@@ -213,6 +238,12 @@ void main() {
     testWidgets('shows model selector dropdown', (tester) async {
       await pumpSettingsScreen(tester);
 
+      await tester.dragUntilVisible(
+        find.text('Model'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
       expect(find.text('Model'), findsOneWidget);
       expect(find.byType(DropdownButton<String>), findsOneWidget);
     });
@@ -220,6 +251,12 @@ void main() {
     testWidgets('shows usage display', (tester) async {
       await pumpSettingsScreen(tester);
 
+      await tester.dragUntilVisible(
+        find.text('Usage'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
       expect(find.text('Usage'), findsOneWidget);
       expect(find.text('No usage today'), findsOneWidget);
     });
@@ -227,6 +264,12 @@ void main() {
     testWidgets('shows daily limit option', (tester) async {
       await pumpSettingsScreen(tester);
 
+      await tester.dragUntilVisible(
+        find.text('Daily limit'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
       expect(find.text('Daily limit'), findsOneWidget);
       expect(find.text('No limit'), findsOneWidget);
     });
@@ -234,6 +277,12 @@ void main() {
     testWidgets('tapping Change key shows input field', (tester) async {
       await pumpSettingsScreen(tester);
 
+      await tester.dragUntilVisible(
+        find.text('Change key'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Change key'));
       await tester.pumpAndSettle();
 
@@ -245,6 +294,13 @@ void main() {
     testWidgets('tapping Remove key shows confirmation dialog', (tester) async {
       await pumpSettingsScreen(tester);
 
+      await tester.dragUntilVisible(
+        find.text('Remove key'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+
       await tester.tap(find.text('Remove key'));
       await tester.pumpAndSettle();
 
@@ -255,6 +311,13 @@ void main() {
 
     testWidgets('confirming Remove deletes key', (tester) async {
       await pumpSettingsScreen(tester);
+
+      await tester.dragUntilVisible(
+        find.text('Remove key'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
 
       // Tap Remove key
       await tester.tap(find.text('Remove key'));
@@ -277,6 +340,13 @@ void main() {
     testWidgets('cancelling Remove keeps key', (tester) async {
       await pumpSettingsScreen(tester);
 
+      await tester.dragUntilVisible(
+        find.text('Remove key'),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+
       await tester.tap(find.text('Remove key'));
       await tester.pumpAndSettle();
 
@@ -298,12 +368,25 @@ void main() {
     testWidgets('default model is Haiku', (tester) async {
       await pumpSettingsScreen(tester);
 
+      await tester.dragUntilVisible(
+        find.byType(DropdownButton<String>),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+
       expect(find.text('Haiku (fastest, cheapest)'), findsOneWidget);
     });
 
     testWidgets('can open model dropdown', (tester) async {
       await pumpSettingsScreen(tester);
 
+      await tester.dragUntilVisible(
+        find.byType(DropdownButton<String>),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byType(DropdownButton<String>));
       await tester.pumpAndSettle();
 
@@ -347,6 +430,12 @@ void main() {
     testWidgets('toggle starts OFF', (tester) async {
       await pumpSettingsScreen(tester);
 
+      await tester.dragUntilVisible(
+        find.byType(Switch),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
       final switchWidget = tester.widget<Switch>(find.byType(Switch));
       expect(switchWidget.value, isFalse);
     });
@@ -354,6 +443,12 @@ void main() {
     testWidgets('tapping toggle changes state', (tester) async {
       await pumpSettingsScreen(tester);
 
+      await tester.dragUntilVisible(
+        find.byType(Switch),
+        find.byType(ListView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byType(Switch));
       await tester.pumpAndSettle();
 

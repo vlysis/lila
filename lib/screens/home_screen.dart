@@ -4,6 +4,7 @@ import '../models/log_entry.dart';
 import '../models/focus_state.dart';
 import '../services/file_service.dart';
 import '../services/focus_controller.dart';
+import '../logic/daily_prompt.dart';
 import '../theme/lila_theme.dart';
 import '../widgets/armed_swipe_to_delete.dart';
 import '../widgets/log_bottom_sheet.dart';
@@ -64,6 +65,9 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  @visibleForTesting
+  Future<void> loadEntriesForTest() => _loadEntries();
+
   void _handleFocusChange() {
     if (!mounted) return;
     setState(() {
@@ -102,7 +106,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final dateStr = DateFormat('EEEE, MMMM d').format(today);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final radii = context.lilaRadii;
     final onSurface = colorScheme.onSurface;
     final subdued = onSurface.withValues(alpha: 0.35);
     final iconForeground = onSurface.withValues(alpha: 0.5);
@@ -222,9 +225,10 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 40),
@@ -246,8 +250,12 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 24),
             _buildFocusCard(),
-            const SizedBox(height: 28),
-            if (_todayEntries.isNotEmpty)
+            const SizedBox(height: 16),
+            _buildModeRibbon(),
+            const SizedBox(height: 24),
+            _buildLogMomentButton(),
+            const SizedBox(height: 16),
+            if (_todayEntries.isNotEmpty) ...[
               GestureDetector(
                 onTap: () => Navigator.push(
                   context,
@@ -257,39 +265,88 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: _buildTodaySummary(),
               ),
-            if (_todayEntries.isNotEmpty && DateTime.now().hour >= 18) ...[
               const SizedBox(height: 20),
-              _buildEveningWhisper(),
             ],
+            _buildDailyPrompt(),
+            const SizedBox(height: 48),
           ],
         ),
       ),
-      floatingActionButton: SizedBox(
-        width: 96,
-        height: 96,
-        child: FloatingActionButton(
-          onPressed: _openLogSheet,
-          backgroundColor: theme.floatingActionButtonTheme.backgroundColor ??
-              colorScheme.surfaceVariant,
-          elevation: 4,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(radii.large),
-          ),
-          child: Icon(
-            Icons.add,
-            color: onSurface.withValues(alpha: 0.8),
-            size: 42,
-          ),
-        ),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
-  Widget _buildEveningWhisper() {
+  Widget _buildLogMomentButton() {
+    final radii = context.lilaRadii;
+    final colorScheme = Theme.of(context).colorScheme;
+    final onSurface = colorScheme.onSurface;
+    final theme = _focusTheme(_focusState.season);
+    final surfaceColor = colorScheme.surfaceVariant.withValues(alpha: 0.4);
+    final borderColor = theme.accent.withValues(alpha: 0.35);
+    final radius =
+        _focusState.season == FocusSeason.builder ? 8.0 : radii.medium;
+
+    return Semantics(
+      button: true,
+      label: 'Log Moment',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: const ValueKey('log_moment_button'),
+          borderRadius: BorderRadius.circular(radius),
+          onTap: _openLogSheet,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: surfaceColor,
+              borderRadius: BorderRadius.circular(radius),
+              border: Border.all(color: borderColor),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 10,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: theme.accent.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(radius - 2),
+                  ),
+                  child: Icon(
+                    Icons.add_rounded,
+                    color: theme.accent.withValues(alpha: 0.9),
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Log Moment',
+                  style: TextStyle(
+                    color: onSurface.withValues(alpha: 0.85),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDailyPrompt() {
     final onSurface = Theme.of(context).colorScheme.onSurface;
-    final hasReflection = _dailyReflection.trim().isNotEmpty;
-    final text = hasReflection ? 'Reflection written.' : 'How did today feel?';
+    final text = dailyPromptText(
+      hour: DateTime.now().hour,
+    );
 
     return GestureDetector(
       onTap: () {
@@ -339,12 +396,15 @@ class _HomeScreenState extends State<HomeScreen> {
               height: 40,
               decoration: BoxDecoration(
                 color: theme.accent.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(theme.radius + 4),
               ),
               child: Icon(
-                season == FocusSeason.builder
-                    ? Icons.wb_sunny_outlined
-                    : Icons.nightlight_outlined,
+                switch (season) {
+                  FocusSeason.builder => Icons.wb_sunny_outlined,
+                  FocusSeason.sanctuary => Icons.nightlight_outlined,
+                  FocusSeason.explorer => Icons.explore_outlined,
+                  FocusSeason.anchor => Icons.anchor_outlined,
+                },
                 color: theme.accent.withValues(alpha: 0.9),
                 size: 22,
               ),
@@ -355,7 +415,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Current Season: ${season.label}',
+                    'Current Season: ${season.currentLabel}',
                     style: TextStyle(
                       color: onSurface.withValues(alpha: 0.85),
                       fontSize: 14,
@@ -382,6 +442,77 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildModeRibbon() {
+    if (_todayEntries.isEmpty) return const SizedBox.shrink();
+    final palette = context.lilaPalette;
+    final radii = context.lilaRadii;
+    final segments = _buildRibbonSegments(_todayEntries);
+    if (segments.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      key: const ValueKey('mode_ribbon'),
+      height: 12,
+      decoration: BoxDecoration(
+        color: Theme.of(context)
+            .colorScheme
+            .surfaceVariant
+            .withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(radii.small),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < segments.length; i++)
+            Expanded(
+              flex: segments[i].count,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: palette
+                      .modeColor(segments[i].mode)
+                      .withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.only(
+                    topLeft: i == 0
+                        ? Radius.circular(radii.small)
+                        : Radius.zero,
+                    bottomLeft: i == 0
+                        ? Radius.circular(radii.small)
+                        : Radius.zero,
+                    topRight: i == segments.length - 1
+                        ? Radius.circular(radii.small)
+                        : Radius.zero,
+                    bottomRight: i == segments.length - 1
+                        ? Radius.circular(radii.small)
+                        : Radius.zero,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<_RibbonSegment> _buildRibbonSegments(List<LogEntry> entries) {
+    final sorted = [...entries]
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    if (sorted.isEmpty) return [];
+
+    final segments = <_RibbonSegment>[];
+    var currentMode = sorted.first.mode;
+    var count = 0;
+
+    for (final entry in sorted) {
+      if (entry.mode == currentMode) {
+        count += 1;
+      } else {
+        segments.add(_RibbonSegment(currentMode, count));
+        currentMode = entry.mode;
+        count = 1;
+      }
+    }
+    segments.add(_RibbonSegment(currentMode, count));
+    return segments;
+  }
+
   _FocusTheme _focusTheme(FocusSeason season) {
     switch (season) {
       case FocusSeason.builder:
@@ -397,6 +528,20 @@ class _HomeScreenState extends State<HomeScreen> {
           border: Color(0xFF6D8570),
           accent: Color(0xFFB07A63),
           radius: 20,
+        );
+      case FocusSeason.explorer:
+        return const _FocusTheme(
+          surface: Color(0xFF1E1A1A),
+          border: Color(0xFF3D2F3A),
+          accent: Color(0xFFE38B4F),
+          radius: 18,
+        );
+      case FocusSeason.anchor:
+        return const _FocusTheme(
+          surface: Color(0xFF1A202C),
+          border: Color(0xFF4A5568),
+          accent: Color(0xFFA0AEC0),
+          radius: 10,
         );
     }
   }
@@ -415,18 +560,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        ..._todayEntries.reversed.take(5).map(_buildSummaryEntry),
-        if (_todayEntries.length > 5)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              'Tap to see all',
-              style: TextStyle(
-                color: onSurface.withValues(alpha: 0.25),
-                fontSize: 12,
-              ),
-            ),
-          ),
+        ..._todayEntries.reversed.map(_buildSummaryEntry),
       ],
     );
   }
@@ -438,6 +572,34 @@ class _HomeScreenState extends State<HomeScreen> {
     final palette = context.lilaPalette;
     final time =
         '${entry.timestamp.hour.toString().padLeft(2, '0')}:${entry.timestamp.minute.toString().padLeft(2, '0')}';
+    final isReflection = entry.label == 'Daily reflection';
+
+    if (isReflection) {
+      return ArmedSwipeToDelete(
+        dismissKey: ValueKey(
+            '${entry.timestamp.toIso8601String()}-${entry.label ?? ''}-${entry.mode.name}-${entry.orientation.name}'),
+        onDelete: () async {
+          final fs = await FileService.getInstance();
+          final removed = await fs.moveEntryToTrash(entry);
+          if (removed && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Moved to trash'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+            await _loadEntries();
+          }
+        },
+        child: _buildSummaryReflectionCard(
+          time,
+          colorScheme: colorScheme,
+          onSurface: onSurface,
+          radii: radii,
+        ),
+      );
+    }
+
     final modeColor = palette.modeColor(entry.mode);
     final modeAsset = _modeAssets[entry.mode]!;
     final orientationColor = palette.orientationColor(entry.orientation);
@@ -523,15 +685,78 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildSummaryReflectionCard(
+    String time, {
+    required ColorScheme colorScheme,
+    required Color onSurface,
+    required LilaRadii radii,
+  }) {
+    final reflectionText = _dailyReflection.trim();
+    final preview = reflectionText.isNotEmpty
+        ? (reflectionText.length > 80
+            ? '${reflectionText.substring(0, 80)}...'
+            : reflectionText)
+        : '';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceVariant.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(radii.medium),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (preview.isNotEmpty) ...[
+                    Text(
+                      preview,
+                      style: TextStyle(
+                        color: onSurface.withValues(alpha: 0.7),
+                        fontSize: 13,
+                        fontStyle: FontStyle.italic,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                  ],
+                  _buildPill(
+                    'Daily reflection',
+                    onSurface.withValues(alpha: 0.4),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              time,
+              style: TextStyle(
+                color: onSurface.withValues(alpha: 0.25),
+                fontSize: 12,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildPill(String text, Color color) {
     final radii = context.lilaRadii;
+    final radius =
+        _focusState.season == FocusSeason.builder ? 6.0 : radii.small;
     final textStyle = Theme.of(context).textTheme.labelSmall ??
         const TextStyle(fontSize: 11, fontWeight: FontWeight.w500);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(radii.small),
+        borderRadius: BorderRadius.circular(radius),
       ),
       child: Text(
         text,
@@ -558,4 +783,11 @@ class _FocusTheme {
     required this.accent,
     required this.radius,
   });
+}
+
+class _RibbonSegment {
+  final Mode mode;
+  final int count;
+
+  const _RibbonSegment(this.mode, this.count);
 }

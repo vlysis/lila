@@ -89,6 +89,7 @@ Duration is optional and omitted if the user skips the duration step.
 ## Design Constraints
 
 - Top AppBar icons are plain (no background ovals); keep tap targets at least 48dp.
+- Builder season uses hard rectangle corners for season card and pills.
 - Dark mode default
 - No red/green success states
 - Drift visually equal to other modes (no stigma)
@@ -179,9 +180,19 @@ The daily reflection screen (accessed via edit icon in home AppBar, or evening w
 
 **Evening whisper:** After 6pm, if entries exist today, the home screen shows a tappable italic prompt ("How did today feel?" or "Reflection written.") that navigates to the reflection screen.
 
+**Home prompt:** The home screen always shows a reflection prompt that changes by time of day.
+- Morning (before 12): "What do you want from today?"
+- Midday (12–17): "How is today unfolding?"
+- Evening (18+): "How did today feel?"
+
 **File structure:** `## Reflection` must always be the last section in daily `.md` files. `appendEntry` inserts new entries before it to preserve this invariant.
 
 **Mode icons:** `assets/icons/` contains `.png` icons for each mode (nourishment, growth, maintenence [sic], drift) and orientation (self, mutual, other), used in the log bottom sheet and daily reflection entry cards.
+
+## App Icon
+
+- Source file: `lila_icon.png`
+- Generated outputs: Android `android/app/src/main/res/mipmap-*/ic_launcher.png`, macOS `macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_*.png`
 
 ## Testing
 

@@ -40,6 +40,7 @@ void main() {
       expect(DurationPreset.moment.label, 'Moment');
       expect(DurationPreset.deep.label, 'Deep');
       expect(DurationPreset.spiral.label, 'Spiral');
+      expect(DurationPreset.brief.label, 'Energizing');
     });
   });
 

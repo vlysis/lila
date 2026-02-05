@@ -81,6 +81,109 @@ class FileService {
 
   String get rootDir => _rootDir;
 
+  Future<String> backupVaultTo(String destinationRootPath) async {
+    final rootDir = Directory(_rootDir);
+    final destinationRoot = Directory(destinationRootPath);
+    if (!await destinationRoot.exists()) {
+      throw FileSystemException(
+        'Destination folder does not exist',
+        destinationRootPath,
+      );
+    }
+
+    final rootCanonical = await rootDir.resolveSymbolicLinks();
+    final destinationCanonical = await destinationRoot.resolveSymbolicLinks();
+    if (_isSubpath(rootCanonical, destinationCanonical)) {
+      throw StateError('Backup destination cannot be inside the vault.');
+    }
+
+    final backupDir = await _createBackupDirectory(destinationRoot);
+    await _copyDirectory(rootDir, backupDir);
+    return backupDir.path;
+  }
+
+  Future<void> restoreVaultFrom(String backupRootPath) async {
+    final rootDir = Directory(_rootDir);
+    final backupDir = Directory(backupRootPath);
+    if (!await backupDir.exists()) {
+      throw FileSystemException(
+        'Backup folder does not exist',
+        backupRootPath,
+      );
+    }
+
+    final rootCanonical = await rootDir.resolveSymbolicLinks();
+    final backupCanonical = await backupDir.resolveSymbolicLinks();
+    if (_isSubpath(rootCanonical, backupCanonical)) {
+      throw StateError('Backup folder cannot be inside the vault.');
+    }
+
+    if (!await _looksLikeVault(backupDir)) {
+      throw StateError('Selected folder does not look like a Lila backup.');
+    }
+
+    await _clearDirectory(rootDir);
+    await _copyDirectory(backupDir, rootDir);
+    await _ensureDirectories();
+  }
+
+  bool _isSubpath(String basePath, String candidatePath) {
+    if (basePath == candidatePath) return true;
+    final normalizedBase = basePath.endsWith(Platform.pathSeparator)
+        ? basePath
+        : '$basePath${Platform.pathSeparator}';
+    return candidatePath.startsWith(normalizedBase);
+  }
+
+  Future<bool> _looksLikeVault(Directory root) async {
+    final dailyDir = Directory('${root.path}/Daily');
+    final weeklyDir = Directory('${root.path}/Weekly');
+    final metaFile = File('${root.path}/Meta/modes.md');
+    return await dailyDir.exists() ||
+        await weeklyDir.exists() ||
+        await metaFile.exists();
+  }
+
+  Future<void> _clearDirectory(Directory root) async {
+    if (!await root.exists()) return;
+    await for (final entity in root.list(followLinks: false)) {
+      await entity.delete(recursive: true);
+    }
+  }
+
+  Future<Directory> _createBackupDirectory(Directory destinationRoot) async {
+    final timestamp = DateFormat('yyyy-MM-dd HHmm').format(DateTime.now());
+    final baseName = 'Lila Backup $timestamp';
+    var name = baseName;
+    var index = 1;
+    var dir = Directory('${destinationRoot.path}/$name');
+
+    while (await dir.exists()) {
+      index += 1;
+      name = '$baseName ($index)';
+      dir = Directory('${destinationRoot.path}/$name');
+    }
+
+    await dir.create(recursive: true);
+    return dir;
+  }
+
+  Future<void> _copyDirectory(Directory source, Directory destination) async {
+    await destination.create(recursive: true);
+    await for (final entity in source.list(followLinks: false)) {
+      final name = entity.path
+          .split(Platform.pathSeparator)
+          .where((segment) => segment.isNotEmpty)
+          .last;
+      final targetPath = '${destination.path}/$name';
+      if (entity is File) {
+        await entity.copy(targetPath);
+      } else if (entity is Directory) {
+        await _copyDirectory(entity, Directory(targetPath));
+      }
+    }
+  }
+
   Future<void> _ensureDirectories() async {
     final dirs = ['Daily', 'Activities', 'Weekly', 'Meta', 'Trash'];
     for (final dir in dirs) {

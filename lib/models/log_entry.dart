@@ -43,6 +43,12 @@ enum DurationPreset {
   spiral;
 
   String get label {
+    if (this == DurationPreset.brief) {
+      return 'Energizing';
+    }
+    if (this == DurationPreset.lost) {
+      return 'Short';
+    }
     return name[0].toUpperCase() + name.substring(1);
   }
 }

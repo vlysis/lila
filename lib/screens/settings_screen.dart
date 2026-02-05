@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../services/ai_api_types.dart';
 import '../services/ai_integration_service.dart';
 import '../services/ai_provider.dart';
@@ -35,6 +36,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isEnteringKey = false;
   String? _keyError;
   bool _isSavingKey = false;
+  bool _isBackingUp = false;
+  bool _isRestoring = false;
 
   // Models are provided by the active provider.
 
@@ -226,6 +229,204 @@ class _SettingsScreenState extends State<SettingsScreen> {
           backgroundColor: Colors.white.withValues(alpha: 0.1),
         ),
       );
+    }
+  }
+
+  Future<void> _backupVault() async {
+    if (_isBackingUp) return;
+    final destination = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: 'Choose backup destination',
+      initialDirectory: _vaultPath,
+    );
+    if (destination == null || !mounted) return;
+
+    final prettyDestination = destination;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: Text(
+          'Backup vault',
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.9)),
+        ),
+        content: Text(
+          'Copy your vault into:\n$prettyDestination',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.7),
+            fontSize: 13,
+            height: 1.4,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              'Back up',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isBackingUp = true);
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        content: Row(
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Backing up...',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final fs = await FileService.getInstance();
+      final backupPath = await fs.backupVaultTo(destination);
+      if (!mounted) return;
+      Navigator.pop(context);
+      final timestamp = DateFormat('MMM d, HH:mm').format(DateTime.now());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Backup saved ($timestamp).'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Backup failed. Try another folder.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isBackingUp = false);
+      }
+    }
+  }
+
+  Future<void> _restoreVault() async {
+    if (_isRestoring) return;
+    final backupPath = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: 'Choose backup folder',
+      initialDirectory: _vaultPath,
+    );
+    if (backupPath == null || !mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: Text(
+          'Restore vault',
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.9)),
+        ),
+        content: Text(
+          'Replace your current vault with:\n$backupPath\n\n'
+          'This cannot be undone.',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.7),
+            fontSize: 13,
+            height: 1.4,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              'Restore',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isRestoring = true);
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        content: Row(
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Restoring...',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final fs = await FileService.getInstance();
+      await fs.restoreVaultFrom(backupPath);
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vault restored.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Restore failed. Check the backup folder.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isRestoring = false);
+      }
     }
   }
 
@@ -577,6 +778,60 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 fontSize: 14,
                 height: 1.5,
               ),
+            ),
+          ),
+          const SizedBox(height: 32),
+          _buildSection(
+            'Backup & Export',
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Copy your current vault to another folder.',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    fontSize: 14,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: _backupVault,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: Text(
+                    _isBackingUp ? 'Backing up...' : 'Backup vault',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.6),
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Restore your vault from a backup folder.',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    fontSize: 14,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: _restoreVault,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: Text(
+                    _isRestoring ? 'Restoring...' : 'Restore vault',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.6),
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 32),

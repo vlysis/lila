@@ -11,6 +11,8 @@ void main() {
 
     expect(find.text('Builder'), findsOneWidget);
     expect(find.text('Sanctuary'), findsOneWidget);
+    expect(find.text('Explorer'), findsOneWidget);
+    expect(find.text('Grounded'), findsOneWidget);
   });
 
   testWidgets('long press confirm saves intention', (tester) async {
@@ -39,7 +41,8 @@ void main() {
     );
 
     await tester.tap(find.text('Open'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     await tester.tap(find.text('Builder'));
     await tester.pumpAndSettle();
@@ -51,6 +54,8 @@ void main() {
     await tester.pump();
 
     final confirm = find.byKey(const ValueKey('intention_confirm'));
+    await tester.ensureVisible(confirm);
+    await tester.pumpAndSettle();
     final center = tester.getCenter(confirm);
     final gesture = await tester.startGesture(center);
     await tester.pump(const Duration(milliseconds: 600));

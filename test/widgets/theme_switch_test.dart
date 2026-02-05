@@ -27,6 +27,48 @@ void main() {
         LilaTheme.sanctuary.scaffoldBackgroundColor);
   });
 
+  testWidgets('Theme uses explorer palette when in explorer',
+      (WidgetTester tester) async {
+    final controller = FocusController();
+    controller.update(const FocusState(
+      season: FocusSeason.explorer,
+      intention: '',
+      setAt: null,
+    ));
+
+    await tester.pumpWidget(
+      LilaApp(
+        focusController: controller,
+        homeOverride: const SizedBox.shrink(),
+      ),
+    );
+
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.theme?.scaffoldBackgroundColor,
+        LilaTheme.explorer.scaffoldBackgroundColor);
+  });
+
+  testWidgets('Theme uses anchor palette when in anchor',
+      (WidgetTester tester) async {
+    final controller = FocusController();
+    controller.update(const FocusState(
+      season: FocusSeason.anchor,
+      intention: '',
+      setAt: null,
+    ));
+
+    await tester.pumpWidget(
+      LilaApp(
+        focusController: controller,
+        homeOverride: const SizedBox.shrink(),
+      ),
+    );
+
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.theme?.scaffoldBackgroundColor,
+        LilaTheme.anchor.scaffoldBackgroundColor);
+  });
+
   testWidgets('Theme switches when focus changes',
       (WidgetTester tester) async {
     final controller = FocusController();
@@ -40,7 +82,7 @@ void main() {
     );
     var app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(app.theme?.scaffoldBackgroundColor,
-        LilaTheme.builder.scaffoldBackgroundColor);
+        LilaTheme.explorer.scaffoldBackgroundColor);
 
     controller.update(const FocusState(
       season: FocusSeason.sanctuary,

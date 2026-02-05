@@ -235,7 +235,7 @@ void main() {
       expect(find.text('Heavy'), findsOneWidget);
     });
 
-    testWidgets('drift shows brief/lost/spiral', (tester) async {
+    testWidgets('drift shows energizing/short/spiral', (tester) async {
       await pumpSheet(tester);
 
       await tester.tap(find.text('Drift'));
@@ -243,8 +243,8 @@ void main() {
       await tester.tap(find.text('Self'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Brief'), findsOneWidget);
-      expect(find.text('Lost'), findsOneWidget);
+      expect(find.text('Energizing'), findsOneWidget);
+      expect(find.text('Short'), findsOneWidget);
       expect(find.text('Spiral'), findsOneWidget);
     });
   });
