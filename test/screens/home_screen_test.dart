@@ -8,6 +8,7 @@ import 'package:lila/models/log_entry.dart';
 import 'package:lila/screens/home_screen.dart';
 import 'package:lila/services/file_service.dart';
 import 'package:lila/services/focus_controller.dart';
+import 'package:lila/logic/daily_prompt.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -90,7 +91,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Daily reflection'), findsOneWidget);
-    expect(find.textContaining('Wandered and wondered'), findsOneWidget);
+    expect(find.textContaining('Wandered and wondered'), findsWidgets);
     expect(find.text('Nourishment'), findsNothing);
     expect(find.text('Self'), findsNothing);
   });
@@ -153,6 +154,40 @@ void main() {
 
     expect(find.text('Nourishment'), findsOneWidget);
     expect(find.text('Growth'), findsOneWidget);
+  });
+
+  testWidgets('reflection section saves text and logs entry', (tester) async {
+    tester.binding.window.physicalSizeTestValue = const Size(800, 1200);
+    tester.binding.window.devicePixelRatioTestValue = 1.0;
+    addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
+    addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
+
+    final controller = FocusController();
+    controller.update(FocusState.defaultState());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomeScreen(focusController: controller),
+      ),
+    );
+
+    final prompt = dailyPromptText(hour: DateTime.now().hour);
+    expect(find.text(prompt), findsAtLeastNWidgets(1));
+
+    final reflectionField = find.byKey(const ValueKey('daily_reflection_input'));
+    expect(reflectionField, findsOneWidget);
+
+    await tester.enterText(reflectionField, 'Grounded and steady.');
+    await tester.pump(const Duration(milliseconds: 1100));
+
+    final logButtonFinder = find.byKey(const ValueKey('log_reflection_button'));
+    final logButton = tester.widget<TextButton>(logButtonFinder);
+    expect(logButton.onPressed, isNotNull);
+
+    await tester.tap(logButtonFinder);
+    await tester.pump();
+
+    expect(find.text('Logging...'), findsOneWidget);
   });
 
   testWidgets('shows all entries without tap to see all hint', (tester) async {

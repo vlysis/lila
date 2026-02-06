@@ -10,10 +10,14 @@ import '../services/ai_usage_service.dart';
 import '../services/claude_api_client.dart';
 import '../services/gemini_api_client.dart';
 import '../services/file_service.dart';
+import '../services/focus_controller.dart';
 import '../services/synthetic_data_service.dart';
+import '../theme/lila_theme.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  final FocusController focusController;
+
+  const SettingsScreen({super.key, required this.focusController});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -112,9 +116,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _changeVaultPath() {
+    final s = context.lilaSurface;
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: s.dialogSurface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -126,10 +131,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               ListTile(
                 leading: Icon(Icons.folder_open,
-                    color: Colors.white.withValues(alpha: 0.6)),
+                    color: s.textSecondary),
                 title: Text('Choose existing folder',
                     style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.8))),
+                        color: s.text)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _pickExistingFolder();
@@ -137,10 +142,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               ListTile(
                 leading: Icon(Icons.create_new_folder,
-                    color: Colors.white.withValues(alpha: 0.6)),
+                    color: s.textSecondary),
                 title: Text('Create new folder',
                     style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.8))),
+                        color: s.text)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _createNewFolder();
@@ -163,27 +168,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _createNewFolder() async {
+    final s = context.lilaSurface;
     final nameController = TextEditingController();
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
         title: Text('New folder name',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.9))),
+            style: TextStyle(color: s.text)),
         content: TextField(
           controller: nameController,
           autofocus: true,
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
+          style: TextStyle(color: s.text),
           decoration: InputDecoration(
             hintText: 'e.g. Lila',
-            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
+            hintStyle: TextStyle(color: s.textFaint),
             enabledBorder: UnderlineInputBorder(
               borderSide:
-                  BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                  BorderSide(color: s.borderSubtle),
             ),
             focusedBorder: UnderlineInputBorder(
               borderSide:
-                  BorderSide(color: Colors.white.withValues(alpha: 0.5)),
+                  BorderSide(color: s.textMuted),
             ),
           ),
         ),
@@ -192,14 +197,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () => Navigator.pop(ctx),
             child: Text('Cancel',
                 style:
-                    TextStyle(color: Colors.white.withValues(alpha: 0.5))),
+                    TextStyle(color: s.textMuted)),
           ),
           TextButton(
             onPressed: () =>
                 Navigator.pop(ctx, nameController.text.trim()),
             child: Text('Next',
                 style:
-                    TextStyle(color: Colors.white.withValues(alpha: 0.8))),
+                    TextStyle(color: s.text)),
           ),
         ],
       ),
@@ -222,11 +227,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final fs = await FileService.getInstance();
     await fs.setVaultPath(path);
     if (mounted) {
+      final s = context.lilaSurface;
       setState(() => _vaultPath = path);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Vault location updated.'),
-          backgroundColor: Colors.white.withValues(alpha: 0.1),
+          backgroundColor: s.overlay,
         ),
       );
     }
@@ -240,19 +246,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (destination == null || !mounted) return;
 
+    final s = context.lilaSurface;
     final prettyDestination = destination;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
         title: Text(
           'Backup vault',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.9)),
+          style: TextStyle(color: s.text),
         ),
         content: Text(
           'Copy your vault into:\n$prettyDestination',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.7),
+            color: s.textSecondary,
             fontSize: 13,
             height: 1.4,
           ),
@@ -262,14 +268,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
               'Cancel',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+              style: TextStyle(color: s.textMuted),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(
               'Back up',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
+              style: TextStyle(color: s.text),
             ),
           ),
         ],
@@ -282,7 +288,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
         content: Row(
           children: [
             SizedBox(
@@ -290,13 +295,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               height: 18,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Colors.white.withValues(alpha: 0.7),
+                color: s.textSecondary,
               ),
             ),
             const SizedBox(width: 12),
             Text(
               'Backing up...',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+              style: TextStyle(color: s.textSecondary),
             ),
           ],
         ),
@@ -339,19 +344,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (backupPath == null || !mounted) return;
 
+    final s = context.lilaSurface;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
         title: Text(
           'Restore vault',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.9)),
+          style: TextStyle(color: s.text),
         ),
         content: Text(
           'Replace your current vault with:\n$backupPath\n\n'
           'This cannot be undone.',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.7),
+            color: s.textSecondary,
             fontSize: 13,
             height: 1.4,
           ),
@@ -361,14 +366,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
               'Cancel',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+              style: TextStyle(color: s.textMuted),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(
               'Restore',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
+              style: TextStyle(color: s.text),
             ),
           ),
         ],
@@ -382,7 +387,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
         content: Row(
           children: [
             SizedBox(
@@ -390,13 +394,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               height: 18,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Colors.white.withValues(alpha: 0.7),
+                color: s.textSecondary,
               ),
             ),
             const SizedBox(width: 12),
             Text(
               'Restoring...',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+              style: TextStyle(color: s.textSecondary),
             ),
           ],
         ),
@@ -492,6 +496,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (!mounted) return;
 
+    final s = context.lilaSurface;
     if (saveError != null) {
       setState(() {
         _keyError = saveError;
@@ -508,7 +513,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('API key validated and saved.'),
-          backgroundColor: Colors.white.withValues(alpha: 0.1),
+          backgroundColor: s.overlay,
         ),
       );
     }
@@ -523,24 +528,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _confirmDeleteKey() {
+    final s = context.lilaSurface;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
         title: Text(
           'Remove API key?',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.9)),
+          style: TextStyle(color: s.text),
         ),
         content: Text(
           'This will disable ${_activeProvider.displayName} integration and remove your saved key.',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+          style: TextStyle(color: s.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text(
               'Cancel',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+              style: TextStyle(color: s.textMuted),
             ),
           ),
           TextButton(
@@ -556,7 +561,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: const Text('API key removed.'),
-                    backgroundColor: Colors.white.withValues(alpha: 0.1),
+                    backgroundColor: context.lilaSurface.overlay,
                   ),
                 );
               }
@@ -586,16 +591,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showDailyCapDialog() {
+    final s = context.lilaSurface;
     final controller = TextEditingController(
       text: _dailyCap > 0 ? (_dailyCap ~/ 1000).toString() : '',
     );
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
         title: Text(
           'Daily token limit',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.9)),
+          style: TextStyle(color: s.text),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -604,7 +609,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Text(
               'Set a daily limit (in thousands of tokens) to control costs. Leave empty for no limit.',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.6),
+                color: s.textSecondary,
                 fontSize: 13,
               ),
             ),
@@ -612,17 +617,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             TextField(
               controller: controller,
               keyboardType: TextInputType.number,
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
+              style: TextStyle(color: s.text),
               decoration: InputDecoration(
                 hintText: 'e.g., 100 for 100K tokens',
-                hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
+                hintStyle: TextStyle(color: s.textFaint),
                 suffixText: 'K tokens',
-                suffixStyle: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+                suffixStyle: TextStyle(color: s.textMuted),
                 enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                  borderSide: BorderSide(color: s.borderSubtle),
                 ),
                 focusedBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.5)),
+                  borderSide: BorderSide(color: s.textMuted),
                 ),
               ),
             ),
@@ -633,7 +638,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () => Navigator.pop(ctx),
             child: Text(
               'Cancel',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+              style: TextStyle(color: s.textMuted),
             ),
           ),
           TextButton(
@@ -648,7 +653,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
             child: Text(
               'Save',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
+              style: TextStyle(color: s.text),
             ),
           ),
         ],
@@ -660,34 +665,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final fs = await FileService.getInstance();
     await SyntheticDataService.generateWeek(fs);
     if (mounted) {
+      final s = context.lilaSurface;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Test week generated.'),
-          backgroundColor: Colors.white.withValues(alpha: 0.1),
+          backgroundColor: s.overlay,
         ),
       );
     }
   }
 
   void _confirmReset() {
+    final s = context.lilaSurface;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
         title: Text(
           'Reset vault?',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.9)),
+          style: TextStyle(color: s.text),
         ),
         content: Text(
           'This will delete all logged entries. This cannot be undone.',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+          style: TextStyle(color: s.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text(
               'Cancel',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+              style: TextStyle(color: s.textMuted),
             ),
           ),
           TextButton(
@@ -699,7 +705,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: const Text('Vault reset.'),
-                    backgroundColor: Colors.white.withValues(alpha: 0.1),
+                    backgroundColor: context.lilaSurface.overlay,
                   ),
                 );
               }
@@ -718,6 +724,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final onSurface = theme.colorScheme.onSurface;
+    final s = context.lilaSurface;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -741,6 +748,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.all(24),
         children: [
           _buildSection(
+            'Appearance',
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Dark mode',
+                  style: TextStyle(
+                    color: s.textSecondary,
+                    fontSize: 14,
+                  ),
+                ),
+                Switch(
+                  value: widget.focusController.brightness == Brightness.dark,
+                  onChanged: (isDark) {
+                    widget.focusController.setBrightness(
+                      isDark ? Brightness.dark : Brightness.light,
+                    );
+                  },
+                  activeThumbColor: const Color(0xFF6B8AFF),
+                  activeTrackColor: const Color(0xFF6B8AFF).withValues(alpha: 0.4),
+                  inactiveThumbColor: s.textFaint,
+                  inactiveTrackColor: s.overlay,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 32),
+          _buildSection(
             'Vault location',
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -748,7 +783,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Text(
                   _vaultPath,
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.4),
+                    color: s.textMuted,
                     fontSize: 13,
                     fontFamily: 'monospace',
                   ),
@@ -759,7 +794,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Text(
                     'Change',
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.6),
+                      color: s.textSecondary,
                       fontSize: 14,
                     ),
                   ),
@@ -774,7 +809,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'All entries are stored as Markdown files. '
               'Copy the Lila folder into your Obsidian vault to view them.',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.5),
+                color: s.textMuted,
                 fontSize: 14,
                 height: 1.5,
               ),
@@ -789,7 +824,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Text(
                   'Copy your current vault to another folder.',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.5),
+                    color: s.textMuted,
                     fontSize: 14,
                     height: 1.5,
                   ),
@@ -803,7 +838,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Text(
                     _isBackingUp ? 'Backing up...' : 'Backup vault',
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.6),
+                      color: s.textSecondary,
                       fontSize: 14,
                     ),
                   ),
@@ -812,7 +847,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Text(
                   'Restore your vault from a backup folder.',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.5),
+                    color: s.textMuted,
                     fontSize: 14,
                     height: 1.5,
                   ),
@@ -826,7 +861,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Text(
                     _isRestoring ? 'Restoring...' : 'Restore vault',
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.6),
+                      color: s.textSecondary,
                       fontSize: 14,
                     ),
                   ),
@@ -851,7 +886,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Text(
                   'Generate test week',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
+                    color: s.textSecondary,
                     fontSize: 14,
                   ),
                 ),
@@ -878,6 +913,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildAiSection() {
+    final s = context.lilaSurface;
     final availableModels = _activeProvider.availableModels;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -889,21 +925,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Text(
               'Provider',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.6),
+                color: s.textSecondary,
                 fontSize: 14,
               ),
             ),
             DropdownButton<AiProvider>(
               value: _activeProvider,
-              dropdownColor: const Color(0xFF2A2A2A),
+              dropdownColor: s.dropdownSurface,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.8),
+                color: s.text,
                 fontSize: 14,
               ),
               underline: const SizedBox(),
               icon: Icon(
                 Icons.arrow_drop_down,
-                color: Colors.white.withValues(alpha: 0.5),
+                color: s.textMuted,
               ),
               items: AiProvider.values.map((provider) {
                 return DropdownMenuItem(
@@ -925,7 +961,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Text(
               'AI integration',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.8),
+                color: s.text,
                 fontSize: 14,
               ),
             ),
@@ -934,8 +970,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: _hasApiKey ? _toggleAiEnabled : null,
               activeThumbColor: const Color(0xFF6B8AFF),
               activeTrackColor: const Color(0xFF6B8AFF).withValues(alpha: 0.4),
-              inactiveThumbColor: Colors.white.withValues(alpha: 0.3),
-              inactiveTrackColor: Colors.white.withValues(alpha: 0.1),
+              inactiveThumbColor: s.textFaint,
+              inactiveTrackColor: s.overlay,
             ),
           ],
         ),
@@ -947,7 +983,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Text(
               'Enter an API key below to enable.',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.4),
+                color: s.textMuted,
                 fontSize: 13,
               ),
             ),
@@ -961,7 +997,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.05),
+              color: s.overlay,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -969,14 +1005,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Icon(
                   Icons.key,
                   size: 16,
-                  color: Colors.white.withValues(alpha: 0.4),
+                  color: s.textMuted,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     _maskedKey ?? '***',
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.6),
+                      color: s.textSecondary,
                       fontSize: 13,
                       fontFamily: 'monospace',
                     ),
@@ -994,7 +1030,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Text(
                   'Change key',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
+                    color: s.textSecondary,
                     fontSize: 14,
                   ),
                 ),
@@ -1027,20 +1063,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
               autocorrect: false,
               enableSuggestions: false,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.8),
+                color: s.text,
                 fontSize: 14,
                 fontFamily: 'monospace',
               ),
               decoration: InputDecoration(
                 hintText: _activeProvider.keyHint,
                 hintStyle: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.3),
+                  color: s.textFaint,
                   fontFamily: 'monospace',
                 ),
                 errorText: _keyError,
                 errorStyle: const TextStyle(color: Color(0xFFCF6679)),
                 filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.05),
+                fillColor: s.overlay,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: BorderSide.none,
@@ -1102,7 +1138,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Text(
                     'Cancel',
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.5),
+                      color: s.textMuted,
                     ),
                   ),
                 ),
@@ -1121,21 +1157,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Text(
                 'Model',
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.6),
+                  color: s.textSecondary,
                   fontSize: 14,
                 ),
               ),
               DropdownButton<String>(
                 value: _selectedModel,
-                dropdownColor: const Color(0xFF2A2A2A),
+                dropdownColor: s.dropdownSurface,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.8),
+                  color: s.text,
                   fontSize: 14,
                 ),
                 underline: const SizedBox(),
                 icon: Icon(
                   Icons.arrow_drop_down,
-                  color: Colors.white.withValues(alpha: 0.5),
+                  color: s.textMuted,
                 ),
                 items: availableModels.map((model) {
                   return DropdownMenuItem(
@@ -1157,14 +1193,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Text(
                 'Usage',
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.6),
+                  color: s.textSecondary,
                   fontSize: 14,
                 ),
               ),
               Text(
                 _usageSummary,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.5),
+                  color: s.textMuted,
                   fontSize: 14,
                 ),
               ),
@@ -1178,7 +1214,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Text(
                 'Daily limit',
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.6),
+                  color: s.textSecondary,
                   fontSize: 14,
                 ),
               ),
@@ -1191,7 +1227,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ? AiUsageService.formatTokens(_dailyCap)
                           : 'No limit',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.5),
+                        color: s.textMuted,
                         fontSize: 14,
                       ),
                     ),
@@ -1199,7 +1235,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Icon(
                       Icons.edit,
                       size: 14,
-                      color: Colors.white.withValues(alpha: 0.4),
+                      color: s.textMuted,
                     ),
                   ],
                 ),
@@ -1212,7 +1248,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Text(
           'Your API key is stored securely on this device and never sent anywhere except to your selected provider.',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.35),
+            color: s.textFaint,
             fontSize: 12,
             height: 1.4,
           ),
@@ -1221,7 +1257,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Text(
           'API keys are sensitive. Client-side use can expose them, so consider restricting keys in your provider settings.',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.35),
+            color: s.textFaint,
             fontSize: 12,
             height: 1.4,
           ),
@@ -1231,13 +1267,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildSection(String title, Widget child) {
+    final s = context.lilaSurface;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.3),
+            color: s.textFaint,
             fontSize: 12,
             letterSpacing: 0.8,
             fontWeight: FontWeight.w600,

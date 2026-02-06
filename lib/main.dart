@@ -28,13 +28,15 @@ class LilaApp extends StatelessWidget {
     return AnimatedBuilder(
       animation: focusController,
       builder: (context, _) {
-        final theme = LilaTheme.forSeason(focusController.state.season);
+        final brightness = focusController.brightness;
+        final theme = LilaTheme.forSeason(focusController.state.season, brightness);
+        final isLight = brightness == Brightness.light;
         SystemChrome.setSystemUIOverlayStyle(
           SystemUiOverlayStyle(
             statusBarColor: Colors.transparent,
-            statusBarIconBrightness: Brightness.light,
+            statusBarIconBrightness: isLight ? Brightness.dark : Brightness.light,
             systemNavigationBarColor: theme.scaffoldBackgroundColor,
-            systemNavigationBarIconBrightness: Brightness.light,
+            systemNavigationBarIconBrightness: isLight ? Brightness.dark : Brightness.light,
           ),
         );
 

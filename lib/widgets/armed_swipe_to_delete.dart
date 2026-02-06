@@ -116,7 +116,7 @@ class _ArmedSwipeToDeleteState extends State<ArmedSwipeToDelete>
       curve: Curves.easeOut,
       decoration: BoxDecoration(
         color: _revealed
-            ? Colors.white.withValues(alpha: 0.03)
+            ? context.lilaSurface.overlay.withValues(alpha: 0.03)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(radii.medium),
         border: Border.all(
@@ -197,14 +197,14 @@ class _ArmedSwipeToDeleteState extends State<ArmedSwipeToDelete>
                               children: [
                                 Icon(
                                   Icons.delete_outline,
-                                  color: Colors.white.withValues(alpha: 0.7),
+                                  color: context.lilaSurface.textSecondary,
                                   size: 16,
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
                                   'Delete',
                                   style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.7),
+                                    color: context.lilaSurface.textSecondary,
                                     fontSize: 12,
                                   ),
                                 ),

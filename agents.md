@@ -9,6 +9,7 @@ export PATH="/Users/vivek/dev/flutter/bin:$PATH"
 flutter pub get
 flutter run                # run on connected device/emulator
 flutter build apk --debug  # build Android APK
+flutter build ios --debug  # build iOS app (requires Xcode)
 flutter build macos --debug # build macOS app (requires CocoaPods)
 flutter analyze            # static analysis
 flutter test               # run tests
@@ -16,7 +17,7 @@ flutter test               # run tests
 
 ## Architecture
 
-- **Framework:** Flutter (Android + macOS)
+- **Framework:** Flutter (Android + iOS + macOS)
 - **Storage:** Local `.md` files only, no database
 - **Vault path:** `<app documents>/Lila/` by default, user-configurable in Settings
   - Custom path persisted via `SharedPreferences` (`custom_vault_path` key)
@@ -31,6 +32,8 @@ flutter test               # run tests
   - `Weekly/YYYY-Www.md` — auto-generated weekly summaries + user reflections
   - `Meta/modes.md` — mode definitions
   - `Trash/YYYY-MM-DD.md` — soft-deleted moments (permanent unless deleted manually)
+  - Vault backups can be created/restored from Settings. Backups copy the entire vault
+    into a timestamped folder inside a user-chosen destination.
 
 ## Project Structure
 
@@ -40,15 +43,19 @@ lib/
   models/log_entry.dart            # Mode, LogOrientation, LogEntry (with MD serialization)
   services/
     file_service.dart              # File I/O: create/append/read daily + weekly .md files, daily/weekly reflections
+    focus_controller.dart          # Current intention + brightness (light/dark) state
     claude_service.dart            # Claude API key storage, integration toggle, format validation
     claude_api_client.dart         # Dio HTTP client for Claude API with retry, error handling, log redaction
     claude_usage_service.dart      # Token usage tracking, daily caps, UTC midnight reset
     synthetic_data_service.dart    # Generates 7 days of test data (debug only)
     weekly_summary_service.dart    # Builds weekly markdown summaries
   screens/
-    home_screen.dart               # Today view with whisper, summary, FAB, evening reflection prompt
+    home_screen.dart               # Today view with mode ribbon, moments list, Log Moment button, reflection input, trash + garden icons
     daily_detail_screen.dart       # Read-only entry list with mode/orientation badges
-    daily_reflection_screen.dart   # End-of-day reflection: day summary, entry cards, free-text reflection
+    daily_reflection_screen.dart   # Legacy full-screen reflection view (home screen now hosts reflection)
+    intention_flow_screen.dart     # Intention selector (Builder/Sanctuary/Explorer/Grounded)
+    trash_screen.dart              # Trash browser with swipe-to-restore/delete
+    visualization_screen.dart      # Balance Garden visualizations (sentiment + word blooms)
     weekly_review_screen.dart      # Weekly visualizations and reflections
     settings_screen.dart           # Vault path (changeable), Obsidian info, reset vault, test data
   widgets/
@@ -69,10 +76,12 @@ lib/
   - Nourishment: moment, stretch, immersive
   - Growth: focused, deep, extended
   - Maintenance: quick, routine, heavy
-  - Drift: brief, lost, spiral
+  - Drift: energizing, short, spiral (stored values remain `brief`, `lost`, `spiral`)
 - **LogEntry:** ephemeral — immediately serialized to Markdown, never stored as objects
 - **FileService:** singleton with `@visibleForTesting resetInstance()` for test isolation
 - Flutter's `Orientation` conflicts with ours, so the enum is named `LogOrientation`
+ - **FocusSeason:** Builder, Sanctuary, Explorer, Grounded (Anchor). Explorer is the default.
+ - **Theme:** Light/dark mode toggle stored in `SharedPreferences` (`lila_dark_mode`).
 
 ## Markdown Entry Format
 
@@ -90,7 +99,7 @@ Duration is optional and omitted if the user skips the duration step.
 
 - Top AppBar icons are plain (no background ovals); keep tap targets at least 48dp.
 - Builder season uses hard rectangle corners for season card and pills.
-- Dark mode default
+- Dark mode default, but a light/dark toggle lives in Settings.
 - No red/green success states
 - Drift visually equal to other modes (no stigma)
 - No productivity language
@@ -168,17 +177,34 @@ The weekly review screen (accessed via week icon in home AppBar) contains:
 
 Weekly markdown includes `## Reflection` section that persists user text across sessions.
 
+## Balance Garden
+
+The Balance Garden visualization screen (garden icon on home AppBar) shows:
+1. **Tone summary** — sentiment tone from reflections + tags
+2. **Mode pebbles** — color balance across modes
+3. **Orientation threads** — proportional bars
+4. **Reflection blooms** — recent reflection count
+5. **Word blooms** — reflection + tag words with rising highlights
+6. **Tone trend** — 7-day tone line
+
+All analysis is local-only (`SentimentAnalyzer`, `WordBloomBuilder`).
+
+## Trash
+
+Trash screen (trash icon + label on home AppBar) allows:
+1. Swipe left to permanently delete a trashed moment.
+2. Swipe right to restore a trashed moment to its original day.
+3. Empty state copy when no deleted moments exist.
+
 ## Daily Reflection
 
-The daily reflection screen (accessed via edit icon in home AppBar, or evening whisper prompt) contains:
-1. **Date header** — "Monday, February 2" style
-2. **Day summary** — entry count + mode breakdown
-3. **Daily whisper** — same logic as home screen whisper
-4. **Entry cards** — each logged moment shown with mode icon (from `assets/icons/`), label, mode pill, orientation pill, and timestamp. "Daily reflection" entries render differently: no icon, user's reflection text shown in the pill, single "Daily reflection" tag.
-5. **Reflection text area** — free-text, placeholder "How did today feel?", debounced 1s auto-save to `Daily/YYYY-MM-DD.md` under `## Reflection`
-6. **Log button** — logs a "Daily reflection" entry (mode: nourishment, orientation: self) to the daily file
+Daily reflection now lives on the **home screen**:
+1. **Prompt** — changes by time of day (see below)
+2. **Reflection text area** — debounced auto-save to `Daily/YYYY-MM-DD.md` under `## Reflection`
+3. **Log Reflection button** — logs a "Daily reflection" entry (mode: nourishment, orientation: self)
+4. **Entry cards** — "Daily reflection" entries render with the user text and a "Daily reflection" tag
 
-**Evening whisper:** After 6pm, if entries exist today, the home screen shows a tappable italic prompt ("How did today feel?" or "Reflection written.") that navigates to the reflection screen.
+The `daily_reflection_screen.dart` file remains but is no longer the primary UI.
 
 **Home prompt:** The home screen always shows a reflection prompt that changes by time of day.
 - Morning (before 12): "What do you want from today?"

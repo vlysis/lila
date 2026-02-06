@@ -6,8 +6,9 @@ import '../theme/lila_theme.dart';
 
 class LogBottomSheet extends StatefulWidget {
   final VoidCallback onLogged;
+  final DateTime? date;
 
-  const LogBottomSheet({super.key, required this.onLogged});
+  const LogBottomSheet({super.key, required this.onLogged, this.date});
 
   @override
   State<LogBottomSheet> createState() => _LogBottomSheetState();
@@ -54,12 +55,18 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
 
     setState(() => _saving = true);
 
+    final now = DateTime.now();
+    final ts = widget.date != null
+        ? DateTime(widget.date!.year, widget.date!.month, widget.date!.day,
+            now.hour, now.minute, now.second)
+        : now;
+
     final entry = LogEntry(
       label: _label,
       mode: _selectedMode!,
       orientation: _selectedOrientation!,
       duration: _selectedDuration,
-      timestamp: DateTime.now(),
+      timestamp: ts,
     );
 
     final fs = await FileService.getInstance();
@@ -144,7 +151,7 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
               Text(
                 'What kind of moment?',
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.6),
+                  color: context.lilaSurface.textSecondary,
                   fontSize: 16,
                 ),
               ),
@@ -159,7 +166,7 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
               Text(
                 'Directed toward?',
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.6),
+                  color: context.lilaSurface.textSecondary,
                   fontSize: 16,
                 ),
               ),
@@ -178,7 +185,7 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
               Text(
                 'How long?',
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.6),
+                  color: context.lilaSurface.textSecondary,
                   fontSize: 16,
                 ),
               ),
@@ -281,12 +288,13 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
   }
 
   Widget _buildOrientationSelector() {
+    final s = context.lilaSurface;
     return Row(
       children: LogOrientation.values.map((o) {
         final isSelected = _selectedOrientation == o;
         final iconColor = isSelected
-            ? Colors.white
-            : Colors.white.withValues(alpha: 0.5);
+            ? s.foreground
+            : s.textMuted;
         return Expanded(
           child: GestureDetector(
             onTap: () => _selectOrientation(o),
@@ -296,13 +304,13 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? Colors.white.withValues(alpha: 0.15)
-                    : Colors.white.withValues(alpha: 0.05),
+                    ? s.overlay
+                    : s.overlay.withValues(alpha: 0.04),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: isSelected
-                      ? Colors.white.withValues(alpha: 0.3)
-                      : Colors.white.withValues(alpha: 0.1),
+                      ? s.borderSubtle
+                      : s.borderSubtle.withValues(alpha: 0.08),
                 ),
               ),
               child: Column(
@@ -335,11 +343,12 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
   }
 
   Widget _buildSelectedOrientationBadge() {
+    final s = context.lilaSurface;
     final o = _selectedOrientation!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
+        color: s.overlay,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -349,14 +358,14 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
             _orientationAssets[o]!,
             width: 18,
             height: 18,
-            color: Colors.white.withValues(alpha: 0.6),
+            color: s.textSecondary,
             colorBlendMode: BlendMode.srcIn,
           ),
           const SizedBox(width: 6),
           Text(
             o.label,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.6),
+              color: s.textSecondary,
               fontSize: 13,
             ),
           ),
@@ -366,6 +375,7 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
   }
 
   Widget _buildDurationSelector() {
+    final s = context.lilaSurface;
     final presets = _selectedMode!.durationPresets;
     final modeColor = context.lilaPalette.modeColor(_selectedMode!);
     return Row(
@@ -381,12 +391,12 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
               decoration: BoxDecoration(
                 color: isSelected
                     ? modeColor.withValues(alpha: 0.2)
-                    : Colors.white.withValues(alpha: 0.05),
+                    : s.overlay.withValues(alpha: 0.04),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: isSelected
                       ? modeColor.withValues(alpha: 0.4)
-                      : Colors.white.withValues(alpha: 0.1),
+                      : s.borderSubtle.withValues(alpha: 0.08),
                 ),
               ),
               child: Center(
@@ -395,7 +405,7 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
                   style: TextStyle(
                     color: isSelected
                         ? modeColor
-                        : Colors.white.withValues(alpha: 0.6),
+                        : s.textSecondary,
                     fontSize: 13,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                   ),
@@ -416,7 +426,7 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
         child: Text(
           'Skip',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.4),
+            color: context.lilaSurface.textMuted,
             fontSize: 14,
           ),
         ),
@@ -444,17 +454,18 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
   }
 
   Widget _buildLabelInput() {
+    final s = context.lilaSurface;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TextField(
           autofocus: false,
-          style: const TextStyle(color: Colors.white),
+          style: TextStyle(color: s.foreground),
           decoration: InputDecoration(
             hintText: 'What was it?',
-            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
+            hintStyle: TextStyle(color: s.textFaint),
             filled: true,
-            fillColor: Colors.white.withValues(alpha: 0.05),
+            fillColor: s.overlay.withValues(alpha: 0.04),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
@@ -479,13 +490,13 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.08),
+                    color: s.overlay,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     label,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.6),
+                      color: s.textSecondary,
                       fontSize: 13,
                     ),
                   ),
@@ -499,12 +510,13 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
   }
 
   Widget _buildSaveButton() {
+    final s = context.lilaSurface;
     return SizedBox(
       width: double.infinity,
       child: TextButton(
         onPressed: _saving ? null : _saveEntry,
         style: TextButton.styleFrom(
-          backgroundColor: Colors.white.withValues(alpha: 0.1),
+          backgroundColor: s.overlay,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -513,7 +525,7 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
         child: Text(
           _label?.isNotEmpty == true ? 'Log' : 'Log without label',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.7),
+            color: s.textSecondary,
             fontSize: 15,
           ),
         ),
