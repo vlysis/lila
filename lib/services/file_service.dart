@@ -576,6 +576,35 @@ class FileService {
     return dates;
   }
 
+  Future<({List<LogEntry> entries, String reflection})>
+      readDailyEntriesAndReflection(DateTime date) async {
+    final path = _dailyFilePath(date);
+    final file = File(path);
+    if (!await file.exists()) {
+      return (entries: <LogEntry>[], reflection: '');
+    }
+
+    final content = await file.readAsString();
+
+    // Parse entries
+    final entries = <LogEntry>[];
+    final blocks = content.split(RegExp(r'\n(?=- \*\*)'));
+    for (final block in blocks) {
+      final entry = LogEntry.fromMarkdown(block);
+      if (entry != null) {
+        entries.add(_applyDate(entry, date));
+      }
+    }
+
+    // Parse reflection
+    final match = RegExp(
+      r'## Reflection\n\n([\s\S]*?)(?=\n## |$)',
+    ).firstMatch(content);
+    final reflection = match?.group(1)?.trim() ?? '';
+
+    return (entries: entries, reflection: reflection);
+  }
+
   Future<String> readDailyRaw(DateTime date) async {
     final path = _dailyFilePath(date);
     final file = File(path);

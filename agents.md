@@ -42,7 +42,7 @@ lib/
   main.dart                        # Entry point, dark theme, LilaApp widget
   models/log_entry.dart            # Mode, LogOrientation, LogEntry (with MD serialization)
   services/
-    file_service.dart              # File I/O: create/append/read daily + weekly .md files, daily/weekly reflections
+    file_service.dart              # File I/O: create/append/read daily + weekly .md files, daily/weekly reflections, available dates
     focus_controller.dart          # Current intention + brightness (light/dark) state
     claude_service.dart            # Claude API key storage, integration toggle, format validation
     claude_api_client.dart         # Dio HTTP client for Claude API with retry, error handling, log redaction
@@ -50,7 +50,7 @@ lib/
     synthetic_data_service.dart    # Generates 7 days of test data (debug only)
     weekly_summary_service.dart    # Builds weekly markdown summaries
   screens/
-    home_screen.dart               # Today view with mode ribbon, moments list, Log Moment button, reflection input, trash + garden icons
+    home_screen.dart               # Day view with horizontal swipe navigation, mode ribbon, moments list, Log Moment button, reflection input, trash + garden icons
     daily_detail_screen.dart       # Read-only entry list with mode/orientation badges
     daily_reflection_screen.dart   # Legacy full-screen reflection view (home screen now hosts reflection)
     intention_flow_screen.dart     # Intention selector (Builder/Sanctuary/Explorer/Grounded)
@@ -59,7 +59,7 @@ lib/
     weekly_review_screen.dart      # Weekly visualizations and reflections
     settings_screen.dart           # Vault path (changeable), Obsidian info, reset vault, test data
   widgets/
-    log_bottom_sheet.dart          # Log flow: mode grid → orientation → duration presets → optional label
+    log_bottom_sheet.dart          # Log flow: mode grid → orientation → duration presets → optional label; accepts optional date for past-day logging
     whisper.dart                   # Reflection text based on today's entries
     weekly_whisper.dart            # Single-line weekly reflection (first-match rule)
     weekly_insights_widget.dart    # Multi-insight cards (mode balance, rhythm, streaks, arcs)
@@ -99,59 +99,14 @@ Duration is optional and omitted if the user skips the duration step.
 
 - Top AppBar icons are plain (no background ovals); keep tap targets at least 48dp.
 - Builder season uses hard rectangle corners for season card and pills.
-- Dark mode default, but a light/dark toggle lives in Settings.
+- light mode default, but a light/dark toggle lives in Settings.
 - No red/green success states
 - Drift visually equal to other modes (no stigma)
-- No productivity language
 - Minimum 48dp tap targets
 - Weekly visualizations use color/proportion only — no numbers, percentages, or scores
 - Insights are observational, never prescriptive ("Thursday was the fullest day", not "great job Thursday")
 
-## Claude API Integration
 
-Optional user-configurable Claude API integration accessed via "AI & Integrations" section in Settings.
-
-**ClaudeService** (`lib/services/claude_service.dart`):
-- Singleton with `@visibleForTesting resetInstance()` for test isolation
-- Uses `flutter_secure_storage` for API key (iOS Keychain, Android EncryptedSharedPreferences)
-- Key format validation: `^sk-ant-api03-[A-Za-z0-9_-]{40,}$`
-- Masked key display: `sk-ant-...XXXX` (last 4 chars)
-- Integration toggle stored in SharedPreferences (`claude_integration_enabled`)
-- Model selection and daily token cap preferences
-
-**Settings UI states:**
-| State | Toggle | Behaviour |
-|-------|--------|-----------|
-| No key saved | OFF (greyed) | Prompt: "Enter an API key below to enable." |
-| Key saved, off | OFF (active) | Shows masked key |
-| Key saved, on | ON | Integration active |
-
-**ClaudeApiClient** (`lib/services/claude_api_client.dart`):
-- Singleton with `@visibleForTesting resetInstance()` for test isolation
-- Uses `dio` package with base URL `https://api.anthropic.com`
-- Required headers: `x-api-key`, `anthropic-version: 2023-06-01`, `content-type: application/json`
-- Timeouts: connect 10s, receive 60s
-- Retry: 3 attempts with exponential back-off + jitter for 429, 500, 502, 503, 504
-- `validateApiKey(key)` — sends minimal request (haiku, max_tokens: 1) to verify key
-- `sendMessage()` — sends user message, returns response text and token usage
-
-**Error mapping:**
-| HTTP | ClaudeApiError | User Message |
-|------|----------------|--------------|
-| 401 | keyInvalid | "Your API key is invalid or has been revoked..." |
-| 429 | rateLimited | "You've reached the API usage limit..." |
-| 5xx | serverError | "Something went wrong on Anthropic's side..." |
-| timeout | timeout | "The request took too long..." |
-| offline | networkOffline | "No internet connection..." |
-| — | dailyCapReached | "You've reached your daily token limit..." |
-| — | integrationPaused | "Claude integration is paused..." |
-
-**ClaudeUsageService** (`lib/services/claude_usage_service.dart`):
-- Tracks input + output tokens per API call
-- Stores cumulative daily usage in SharedPreferences
-- Resets at UTC midnight
-- Configurable daily cap with warning at 90%, pause at 100%
-- `formatTokens()` — displays "12.5K" or "1.2M"
 
 **Settings UI additions:**
 - Model selector dropdown (Haiku, Sonnet, Opus)
@@ -214,6 +169,23 @@ The `daily_reflection_screen.dart` file remains but is no longer the primary UI.
 **File structure:** `## Reflection` must always be the last section in daily `.md` files. `appendEntry` inserts new entries before it to preserve this invariant.
 
 **Mode icons:** `assets/icons/` contains `.png` icons for each mode (nourishment, growth, maintenence [sic], drift) and orientation (self, mutual, other), used in the log bottom sheet and daily reflection entry cards.
+
+## Day Navigation
+
+The home screen supports horizontal swipe navigation between days:
+- **Swipe right** to go to a previous day, **swipe left** to return toward today
+- Only dates with existing data (plus today) are navigable
+- `FileService.getAvailableDates()` scans `Daily/` for `.md` files to build the date list
+- Title shows "Today", "Yesterday", or the day name (e.g. "Thursday")
+- Date subtitle shows full date (e.g. "Thursday, February 6")
+- "Return to today" link appears when viewing a past day
+- Past days are fully editable: log moments and edit reflections
+- Focus card is hidden on past days (it represents current intention)
+- Past days show "How did this day feel?" prompt instead of time-based prompts
+- Reflection text is saved (debounce flushed) before switching days
+- `AnimatedSwitcher` with `SlideTransition` animates day changes
+- Swipe velocity threshold: 300px/s (avoids conflict with card-level swipe-to-delete)
+- `LogBottomSheet` accepts optional `DateTime? date` param for past-day logging (uses that date with current time-of-day)
 
 ## App Icon
 

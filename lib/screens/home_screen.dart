@@ -32,6 +32,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _focusLoading = true;
   bool _reflectionLoaded = false;
   bool _isLoggingReflection = false;
+  String _lastSavedReflection = '';
 
   late DateTime _selectedDate;
   List<DateTime> _availableDates = [];
@@ -89,6 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _selectedDate = _today();
     _loadEntries();
+    _refreshAvailableDates();
     _focusState = widget.focusController.state;
     _focusLoading = widget.focusController.isLoading;
     widget.focusController.addListener(_handleFocusChange);
@@ -108,26 +110,37 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadEntries() async {
     final fs = await FileService.getInstance();
     final date = _selectedDate;
-    final entries = await fs.readDailyEntries(date);
-    final reflection = await fs.readDailyReflection(date);
-    final dates = await fs.getAvailableDates();
+    final result = await fs.readDailyEntriesAndReflection(date);
     if (mounted) {
       final previousReflection = _dailyReflection;
       setState(() {
-        _todayEntries = entries;
-        _dailyReflection = reflection;
-        _availableDates = dates;
+        _todayEntries = result.entries;
+        _dailyReflection = result.reflection;
         if (!_reflectionLoaded ||
             _reflectionController.text == previousReflection) {
-          _reflectionController.text = reflection;
+          _reflectionController.text = result.reflection;
+          _lastSavedReflection = result.reflection;
           _reflectionLoaded = true;
         }
       });
     }
   }
 
+  Future<void> _refreshAvailableDates() async {
+    final fs = await FileService.getInstance();
+    final dates = await fs.getAvailableDates();
+    if (mounted) {
+      setState(() {
+        _availableDates = dates;
+      });
+    }
+  }
+
   @visibleForTesting
-  Future<void> loadEntriesForTest() => _loadEntries();
+  Future<void> loadEntriesForTest() async {
+    await _loadEntries();
+    await _refreshAvailableDates();
+  }
 
   @visibleForTesting
   Future<void> goToPreviousDayForTest() => _goToPreviousDay();
@@ -152,7 +165,10 @@ class _HomeScreenState extends State<HomeScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => LogBottomSheet(
-        onLogged: _loadEntries,
+        onLogged: () {
+          _loadEntries();
+          _refreshAvailableDates();
+        },
         date: _isToday ? null : _selectedDate,
       ),
     );
@@ -181,8 +197,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _saveReflectionNow() async {
     final text = _reflectionController.text;
+    if (text == _lastSavedReflection) return;
     final fs = await FileService.getInstance();
     await fs.saveDailyReflection(_selectedDate, text);
+    _lastSavedReflection = text;
   }
 
   Future<void> _logReflection() async {
@@ -213,6 +231,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (mounted) {
       await _loadEntries();
+      _refreshAvailableDates();
       setState(() => _isLoggingReflection = false);
     }
   }
@@ -307,7 +326,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const TrashScreen()),
-              ).then((_) => _loadEntries());
+              ).then((_) { _loadEntries(); _refreshAvailableDates(); });
             },
             child: Container(
               alignment: Alignment.center,
@@ -348,7 +367,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   MaterialPageRoute(
                     builder: (_) => const VisualizationScreen(),
                   ),
-                ).then((_) => _loadEntries());
+                ).then((_) { _loadEntries(); _refreshAvailableDates(); });
               },
               child: Container(
                 width: 54,
@@ -375,7 +394,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     builder: (_) =>
                         WeeklyReviewScreen(weekStart: weekStart),
                   ),
-                ).then((_) => _loadEntries());
+                ).then((_) { _loadEntries(); _refreshAvailableDates(); });
               },
               child: Container(
                 width: 54,
@@ -394,7 +413,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => SettingsScreen(focusController: widget.focusController)),
-              ).then((_) => _loadEntries()),
+              ).then((_) { _loadEntries(); _refreshAvailableDates(); }),
               child: Container(
                 width: 54,
                 height: 54,
@@ -441,8 +460,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     if (_hasPreviousDay)
-                      Icon(Icons.chevron_left, size: 20,
-                          color: onSurface.withValues(alpha: 0.2)),
+                      GestureDetector(
+                        onTap: _goToPreviousDay,
+                        behavior: HitTestBehavior.opaque,
+                        child: SizedBox(
+                          width: 48, height: 48,
+                          child: Center(
+                            child: Icon(Icons.chevron_left, size: 20,
+                                color: onSurface.withValues(alpha: 0.2)),
+                          ),
+                        ),
+                      ),
                     Expanded(
                       child: Text(
                         _titleForDate(),
@@ -454,8 +482,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     if (_hasNextDay)
-                      Icon(Icons.chevron_right, size: 20,
-                          color: onSurface.withValues(alpha: 0.2)),
+                      GestureDetector(
+                        onTap: _goToNextDay,
+                        behavior: HitTestBehavior.opaque,
+                        child: SizedBox(
+                          width: 48, height: 48,
+                          child: Center(
+                            child: Icon(Icons.chevron_right, size: 20,
+                                color: onSurface.withValues(alpha: 0.2)),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -577,25 +614,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildDailyPrompt() {
-    final onSurface = Theme.of(context).colorScheme.onSurface;
-    final text = _isToday
-        ? dailyPromptText(hour: DateTime.now().hour)
-        : 'How did this day feel?';
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: onSurface.withValues(alpha: 0.5),
-          fontSize: 14,
-          fontStyle: FontStyle.italic,
-        ),
-      ),
-    );
-  }
-
   Widget _buildReflectionSection() {
     final colorScheme = Theme.of(context).colorScheme;
     final onSurface = colorScheme.onSurface;
@@ -609,7 +627,6 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildDailyPrompt(),
           TextField(
             key: const ValueKey('daily_reflection_input'),
             controller: _reflectionController,
@@ -624,7 +641,9 @@ class _HomeScreenState extends State<HomeScreen> {
               height: 1.6,
             ),
             decoration: InputDecoration(
-              hintText: 'How did today feel?',
+              hintText: _isToday
+                  ? dailyPromptText(hour: DateTime.now().hour)
+                  : 'How did this day feel?',
               hintStyle: TextStyle(
                 color: onSurface.withValues(alpha: 0.3),
                 fontStyle: FontStyle.italic,
@@ -931,6 +950,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             );
             await _loadEntries();
+            _refreshAvailableDates();
           }
         },
         child: _buildSummaryReflectionCard(
@@ -960,6 +980,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
           await _loadEntries();
+            _refreshAvailableDates();
         }
       },
       child: Padding(
