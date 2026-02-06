@@ -138,9 +138,8 @@ The Balance Garden visualization screen (garden icon on home AppBar) shows:
 1. **Tone summary** — sentiment tone from reflections + tags
 2. **Mode pebbles** — color balance across modes
 3. **Orientation threads** — proportional bars
-4. **Reflection blooms** — recent reflection count
-5. **Word blooms** — reflection + tag words with rising highlights
-6. **Tone trend** — 7-day tone line
+4. **Word blooms** — vertically stacked word clouds (Reflections on top, Tags below), each in its own 200dp container with collision-avoidance layout, capped at 15 words per section
+5. **Tone trend** — 7-day tone line
 
 All analysis is local-only (`SentimentAnalyzer`, `WordBloomBuilder`).
 

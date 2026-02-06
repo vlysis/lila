@@ -131,7 +131,6 @@ class _VisualizationScreenState extends State<VisualizationScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final onSurface = theme.colorScheme.onSurface;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -200,8 +199,6 @@ class _VisualizationScreenState extends State<VisualizationScreen> {
         const SizedBox(height: 32),
         if (allEntries.isNotEmpty)
           OrientationThreadsWidget(weekEntries: allEntries),
-        const SizedBox(height: 32),
-        _buildReflectionBlooms(),
         const SizedBox(height: 32),
         _buildWordBloom(),
         const SizedBox(height: 32),
@@ -313,69 +310,6 @@ class _VisualizationScreenState extends State<VisualizationScreen> {
     );
   }
 
-  Widget _buildReflectionBlooms() {
-    final onSurface = Theme.of(context).colorScheme.onSurface;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'REFLECTION BLOOMS',
-          style: TextStyle(
-            color: onSurface.withValues(alpha: 0.25),
-            fontSize: 11,
-            letterSpacing: 1.2,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 16),
-        ..._days.map((day) {
-          final dotColor = _toneColor(day.sentiment.tone);
-          final dots = List.generate(
-            day.reflectionCount.clamp(0, 6),
-            (_) => Container(
-              width: 8,
-              height: 8,
-              margin: const EdgeInsets.only(right: 6),
-              decoration: BoxDecoration(
-                color: dotColor.withValues(alpha: 0.8),
-                shape: BoxShape.circle,
-              ),
-            ),
-          );
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 36,
-                  child: Text(
-                    day.dayLabel,
-                    style: TextStyle(
-                      color: onSurface.withValues(alpha: 0.3),
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (dots.isEmpty)
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: onSurface.withValues(alpha: 0.08),
-                      shape: BoxShape.circle,
-                    ),
-                  )
-                else
-                  Row(children: dots),
-              ],
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
   Widget _buildToneTrend() {
     final onSurface = Theme.of(context).colorScheme.onSurface;
     return Column(
@@ -452,72 +386,139 @@ class _VisualizationScreenState extends State<VisualizationScreen> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 6),
-        Text(
-          'Reflections + tags, braided',
-          style: TextStyle(
-            color: onSurface.withValues(alpha: 0.45),
-            fontSize: 12,
+        if (_wordBloom.reflectionWords.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Text(
+            'Reflections',
+            style: TextStyle(
+              color: onSurface.withValues(alpha: 0.4),
+              fontSize: 12,
+              fontStyle: FontStyle.italic,
+            ),
           ),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 220,
+          const SizedBox(height: 8),
+          _buildWordSection(
+            words: _wordBloom.reflectionWords,
+            tint: onSurface.withValues(alpha: 0.7),
+            hintColor: onSurface.withValues(alpha: 0.05),
+            isReflection: true,
+          ),
+        ],
+        if (_wordBloom.tagWords.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          Text(
+            'Tags',
+            style: TextStyle(
+              color: onSurface.withValues(alpha: 0.4),
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _buildWordSection(
+            words: _wordBloom.tagWords,
+            tint: onSurface.withValues(alpha: 0.85),
+            hintColor: onSurface.withValues(alpha: 0.08),
+            isReflection: false,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildWordSection({
+    required List<WordBloomEntry> words,
+    required Color tint,
+    required Color hintColor,
+    required bool isReflection,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final height = 200.0;
+        return SizedBox(
+          height: height,
           child: Stack(
             children: [
               Positioned.fill(
                 child: CustomPaint(
-                  painter: _BloomHintPainter(
-                    leftColor: onSurface.withValues(alpha: 0.05),
-                    rightColor: onSurface.withValues(alpha: 0.08),
-                  ),
+                  painter: _BloomCirclePainter(color: hintColor),
                 ),
               ),
               ..._buildBloomWords(
-                words: _wordBloom.reflectionWords,
-                centerX: 0.38,
-                tint: onSurface.withValues(alpha: 0.7),
-                isReflection: true,
-              ),
-              ..._buildBloomWords(
-                words: _wordBloom.tagWords,
-                centerX: 0.62,
-                tint: onSurface.withValues(alpha: 0.85),
-                isReflection: false,
+                words: words,
+                tint: tint,
+                isReflection: isReflection,
+                containerWidth: width,
+                containerHeight: height,
               ),
             ],
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 
   List<Widget> _buildBloomWords({
     required List<WordBloomEntry> words,
-    required double centerX,
     required Color tint,
     required bool isReflection,
+    required double containerWidth,
+    required double containerHeight,
   }) {
     if (words.isEmpty) return [];
+    final capped = words.take(15).toList();
     final maxCount =
-        words.map((e) => e.count).fold<int>(0, (a, b) => a > b ? a : b);
-    final random = Random(words.length);
-    return List.generate(words.length, (index) {
-      final entry = words[index];
-      final angle = random.nextDouble() * pi * 2;
-      final radius = 18 + (index % 5) * 22.0;
-      final dx = centerX + cos(angle) * radius / 260;
-      final dy = 0.45 + sin(angle) * radius / 180;
-      final size =
-          maxCount == 0 ? 12.0 : 12 + (entry.count / maxCount) * 10;
+        capped.map((e) => e.count).fold<int>(0, (a, b) => a > b ? a : b);
+    final random = Random(capped.length);
+    final placed = <Rect>[];
+    const padding = 4.0;
+
+    return List.generate(capped.length, (index) {
+      final entry = capped[index];
+      final fontSize =
+          maxCount == 0 ? 13.0 : 13 + (entry.count / maxCount) * 9;
       final weight = isReflection ? FontWeight.w400 : FontWeight.w600;
       final color = entry.shared
           ? tint.withValues(alpha: 0.9)
           : tint.withValues(alpha: isReflection ? 0.6 : 0.8);
 
+      final wordW = entry.word.length * fontSize * 0.6 + 12;
+      final wordH = fontSize * 1.4 + 4;
+
+      // Initial position: polar from center
+      final angle = random.nextDouble() * pi * 2;
+      final radius = 20 + (index % 5) * 24.0;
+      var x = containerWidth * 0.5 + cos(angle) * radius - wordW / 2;
+      var y = containerHeight * 0.5 + sin(angle) * radius - wordH / 2;
+
+      // Clamp to container bounds
+      x = x.clamp(0, (containerWidth - wordW).clamp(0, double.infinity));
+      y = y.clamp(0, (containerHeight - wordH).clamp(0, double.infinity));
+
+      // Collision avoidance: spiral outward if overlapping
+      var candidate = Rect.fromLTWH(
+          x - padding, y - padding, wordW + padding * 2, wordH + padding * 2);
+      var attempts = 0;
+      while (_overlapsAny(candidate, placed) && attempts < 36) {
+        attempts++;
+        final spiralAngle = angle + attempts * 0.55;
+        final spiralRadius = radius + attempts * 12.0;
+        x = containerWidth * 0.5 +
+            cos(spiralAngle) * spiralRadius -
+            wordW / 2;
+        y = containerHeight * 0.5 +
+            sin(spiralAngle) * spiralRadius -
+            wordH / 2;
+        x = x.clamp(0, (containerWidth - wordW).clamp(0, double.infinity));
+        y = y.clamp(0, (containerHeight - wordH).clamp(0, double.infinity));
+        candidate = Rect.fromLTWH(x - padding, y - padding,
+            wordW + padding * 2, wordH + padding * 2);
+      }
+      placed.add(candidate);
+
       return Positioned(
-        left: (dx * 300).clamp(0, 260).toDouble(),
-        top: (dy * 180).clamp(0, 180).toDouble(),
+        left: x,
+        top: y,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           decoration: entry.rising
@@ -536,7 +537,7 @@ class _VisualizationScreenState extends State<VisualizationScreen> {
             entry.word,
             style: TextStyle(
               color: color,
-              fontSize: size,
+              fontSize: fontSize,
               fontWeight: weight,
               fontStyle:
                   isReflection ? FontStyle.italic : FontStyle.normal,
@@ -545,6 +546,13 @@ class _VisualizationScreenState extends State<VisualizationScreen> {
         ),
       );
     });
+  }
+
+  bool _overlapsAny(Rect candidate, List<Rect> placed) {
+    for (final r in placed) {
+      if (candidate.overlaps(r)) return true;
+    }
+    return false;
   }
 
   Widget _buildMoodCanopy() {
@@ -606,27 +614,23 @@ class _DayGardenData {
   });
 }
 
-class _BloomHintPainter extends CustomPainter {
-  final Color leftColor;
-  final Color rightColor;
+class _BloomCirclePainter extends CustomPainter {
+  final Color color;
 
-  const _BloomHintPainter({
-    required this.leftColor,
-    required this.rightColor,
-  });
+  const _BloomCirclePainter({required this.color});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final leftPaint = Paint()..color = leftColor;
-    final rightPaint = Paint()..color = rightColor;
-    final centerY = size.height * 0.5;
-    canvas.drawCircle(Offset(size.width * 0.32, centerY), 90, leftPaint);
-    canvas.drawCircle(Offset(size.width * 0.68, centerY), 90, rightPaint);
+    final paint = Paint()..color = color;
+    canvas.drawCircle(
+      Offset(size.width * 0.5, size.height * 0.5),
+      size.shortestSide * 0.45,
+      paint,
+    );
   }
 
   @override
-  bool shouldRepaint(covariant _BloomHintPainter oldDelegate) {
-    return oldDelegate.leftColor != leftColor ||
-        oldDelegate.rightColor != rightColor;
+  bool shouldRepaint(covariant _BloomCirclePainter oldDelegate) {
+    return oldDelegate.color != color;
   }
 }
