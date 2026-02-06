@@ -6,8 +6,9 @@ import '../theme/lila_theme.dart';
 
 class LogBottomSheet extends StatefulWidget {
   final VoidCallback onLogged;
+  final DateTime? date;
 
-  const LogBottomSheet({super.key, required this.onLogged});
+  const LogBottomSheet({super.key, required this.onLogged, this.date});
 
   @override
   State<LogBottomSheet> createState() => _LogBottomSheetState();
@@ -54,12 +55,18 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
 
     setState(() => _saving = true);
 
+    final now = DateTime.now();
+    final ts = widget.date != null
+        ? DateTime(widget.date!.year, widget.date!.month, widget.date!.day,
+            now.hour, now.minute, now.second)
+        : now;
+
     final entry = LogEntry(
       label: _label,
       mode: _selectedMode!,
       orientation: _selectedOrientation!,
       duration: _selectedDuration,
-      timestamp: DateTime.now(),
+      timestamp: ts,
     );
 
     final fs = await FileService.getInstance();

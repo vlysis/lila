@@ -561,6 +561,21 @@ class FileService {
     return true;
   }
 
+  Future<List<DateTime>> getAvailableDates() async {
+    final dir = Directory('$_rootDir/Daily');
+    if (!await dir.exists()) return [];
+    final dates = <DateTime>[];
+    await for (final entity in dir.list()) {
+      if (entity is! File || !entity.path.endsWith('.md')) continue;
+      final name = entity.uri.pathSegments.last.replaceAll('.md', '');
+      try {
+        dates.add(DateFormat('yyyy-MM-dd').parseStrict(name));
+      } catch (_) {}
+    }
+    dates.sort();
+    return dates;
+  }
+
   Future<String> readDailyRaw(DateTime date) async {
     final path = _dailyFilePath(date);
     final file = File(path);

@@ -33,6 +33,10 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _reflectionLoaded = false;
   bool _isLoggingReflection = false;
 
+  late DateTime _selectedDate;
+  List<DateTime> _availableDates = [];
+  int _slideDirection = 0;
+
   static const _modeAssets = {
     Mode.nourishment: 'assets/icons/nourishment.png',
     Mode.growth: 'assets/icons/growth.png',
@@ -41,14 +45,49 @@ class _HomeScreenState extends State<HomeScreen> {
   };
 
   final ScrollController _scrollController = ScrollController();
-  final GlobalKey _reflectionSectionKey = GlobalKey();
+  static const _reflectionSectionKey = ValueKey('reflection_section');
   final TextEditingController _reflectionController = TextEditingController();
   final FocusNode _reflectionFocusNode = FocusNode();
   Timer? _reflectionSaveTimer;
 
+  DateTime _today() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
+
+  bool get _isToday {
+    final t = _today();
+    return _selectedDate.year == t.year &&
+        _selectedDate.month == t.month &&
+        _selectedDate.day == t.day;
+  }
+
+  List<DateTime> _navigableDates() {
+    final t = _today();
+    final dates = <DateTime>{..._availableDates, t};
+    final sorted = dates.toList()..sort();
+    return sorted;
+  }
+
+  int _currentDateIndex() {
+    final dates = _navigableDates();
+    for (var i = 0; i < dates.length; i++) {
+      if (dates[i].year == _selectedDate.year &&
+          dates[i].month == _selectedDate.month &&
+          dates[i].day == _selectedDate.day) {
+        return i;
+      }
+    }
+    return dates.length - 1;
+  }
+
+  bool get _hasPreviousDay => _currentDateIndex() > 0;
+  bool get _hasNextDay => _currentDateIndex() < _navigableDates().length - 1;
+
   @override
   void initState() {
     super.initState();
+    _selectedDate = _today();
     _loadEntries();
     _focusState = widget.focusController.state;
     _focusLoading = widget.focusController.isLoading;
@@ -68,14 +107,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadEntries() async {
     final fs = await FileService.getInstance();
-    final now = DateTime.now();
-    final entries = await fs.readDailyEntries(now);
-    final reflection = await fs.readDailyReflection(now);
+    final date = _selectedDate;
+    final entries = await fs.readDailyEntries(date);
+    final reflection = await fs.readDailyReflection(date);
+    final dates = await fs.getAvailableDates();
     if (mounted) {
       final previousReflection = _dailyReflection;
       setState(() {
         _todayEntries = entries;
         _dailyReflection = reflection;
+        _availableDates = dates;
         if (!_reflectionLoaded ||
             _reflectionController.text == previousReflection) {
           _reflectionController.text = reflection;
@@ -87,6 +128,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @visibleForTesting
   Future<void> loadEntriesForTest() => _loadEntries();
+
+  @visibleForTesting
+  Future<void> goToPreviousDayForTest() => _goToPreviousDay();
+
+  @visibleForTesting
+  Future<void> goToNextDayForTest() => _goToNextDay();
+
+  @visibleForTesting
+  Future<void> goToTodayForTest() => _goToToday();
 
   void _handleFocusChange() {
     if (!mounted) return;
@@ -101,12 +151,15 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => LogBottomSheet(onLogged: _loadEntries),
+      builder: (_) => LogBottomSheet(
+        onLogged: _loadEntries,
+        date: _isToday ? null : _selectedDate,
+      ),
     );
   }
 
   void _scrollToReflection() {
-    final targetContext = _reflectionSectionKey.currentContext;
+    final targetContext = _reflectionFocusNode.context;
     if (targetContext != null) {
       Scrollable.ensureVisible(
         targetContext,
@@ -129,7 +182,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _saveReflectionNow() async {
     final text = _reflectionController.text;
     final fs = await FileService.getInstance();
-    await fs.saveDailyReflection(DateTime.now(), text);
+    await fs.saveDailyReflection(_selectedDate, text);
   }
 
   Future<void> _logReflection() async {
@@ -142,11 +195,17 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     await _saveReflectionNow();
 
+    final now = DateTime.now();
+    final ts = _isToday
+        ? now
+        : DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day,
+            now.hour, now.minute, now.second);
+
     final entry = LogEntry(
       label: 'Daily reflection',
       mode: Mode.nourishment,
       orientation: LogOrientation.self_,
-      timestamp: DateTime.now(),
+      timestamp: ts,
     );
 
     final fs = await FileService.getInstance();
@@ -173,10 +232,61 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _goToPreviousDay() async {
+    if (!_hasPreviousDay) return;
+    _reflectionSaveTimer?.cancel();
+    await _saveReflectionNow();
+    final dates = _navigableDates();
+    final idx = _currentDateIndex();
+    setState(() {
+      _reflectionLoaded = false;
+      _slideDirection = 1;
+      _selectedDate = dates[idx - 1];
+    });
+    await _loadEntries();
+  }
+
+  Future<void> _goToNextDay() async {
+    if (!_hasNextDay) return;
+    _reflectionSaveTimer?.cancel();
+    await _saveReflectionNow();
+    final dates = _navigableDates();
+    final idx = _currentDateIndex();
+    setState(() {
+      _reflectionLoaded = false;
+      _slideDirection = -1;
+      _selectedDate = dates[idx + 1];
+    });
+    await _loadEntries();
+  }
+
+  Future<void> _goToToday() async {
+    if (_isToday) return;
+    _reflectionSaveTimer?.cancel();
+    await _saveReflectionNow();
+    setState(() {
+      _reflectionLoaded = false;
+      _slideDirection = -1;
+      _selectedDate = _today();
+    });
+    await _loadEntries();
+  }
+
+  String _titleForDate() {
+    if (_isToday) return 'Today';
+    final t = _today();
+    final yesterday = DateTime(t.year, t.month, t.day - 1);
+    if (_selectedDate.year == yesterday.year &&
+        _selectedDate.month == yesterday.month &&
+        _selectedDate.day == yesterday.day) {
+      return 'Yesterday';
+    }
+    return DateFormat('EEEE').format(_selectedDate);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final today = DateTime.now();
-    final dateStr = DateFormat('EEEE, MMMM d').format(today);
+    final dateStr = DateFormat('EEEE, MMMM d').format(_selectedDate);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final onSurface = colorScheme.onSurface;
@@ -255,8 +365,8 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: GestureDetector(
               onTap: () {
-                final now = DateTime.now();
-                final monday = now.subtract(Duration(days: now.weekday - 1));
+                final ref = _selectedDate;
+                final monday = ref.subtract(Duration(days: ref.weekday - 1));
                 final weekStart =
                     DateTime(monday.year, monday.month, monday.day);
                 Navigator.push(
@@ -298,53 +408,103 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        controller: _scrollController,
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 40),
-            Text(
-              'Today',
-              style: TextStyle(
-                color: onSurface.withValues(alpha: 0.9),
-                fontSize: 32,
-                fontWeight: FontWeight.w300,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              dateStr,
-              style: TextStyle(
-                color: subdued,
-                fontSize: 15,
-              ),
-            ),
-            const SizedBox(height: 24),
-            _buildFocusCard(),
-            const SizedBox(height: 16),
-            _buildModeRibbon(),
-            const SizedBox(height: 24),
-            _buildLogMomentButton(),
-            const SizedBox(height: 16),
-            if (_todayEntries.isNotEmpty) ...[
-              GestureDetector(
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => DailyDetailScreen(date: today),
+      body: GestureDetector(
+        onHorizontalDragEnd: (details) {
+          final velocity = details.primaryVelocity ?? 0;
+          if (velocity > 300 && _hasPreviousDay) {
+            _goToPreviousDay();
+          } else if (velocity < -300 && _hasNextDay) {
+            _goToNextDay();
+          }
+        },
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          transitionBuilder: (child, animation) {
+            final offset = Tween<Offset>(
+              begin: Offset(
+                  _slideDirection == 0 ? 0 : -_slideDirection.toDouble(), 0),
+              end: Offset.zero,
+            ).animate(animation);
+            return SlideTransition(position: offset, child: child);
+          },
+          child: SingleChildScrollView(
+            key: ValueKey(_selectedDate),
+            controller: _scrollController,
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 40),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (_hasPreviousDay)
+                      Icon(Icons.chevron_left, size: 20,
+                          color: onSurface.withValues(alpha: 0.2)),
+                    Expanded(
+                      child: Text(
+                        _titleForDate(),
+                        style: TextStyle(
+                          color: onSurface.withValues(alpha: 0.9),
+                          fontSize: 32,
+                          fontWeight: FontWeight.w300,
+                        ),
+                      ),
+                    ),
+                    if (_hasNextDay)
+                      Icon(Icons.chevron_right, size: 20,
+                          color: onSurface.withValues(alpha: 0.2)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  dateStr,
+                  style: TextStyle(
+                    color: subdued,
+                    fontSize: 15,
                   ),
                 ),
-                child: _buildTodaySummary(),
-              ),
-              const SizedBox(height: 24),
-            ],
-            _buildReflectionSection(),
-            const SizedBox(height: 48),
-          ],
+                if (!_isToday) ...[
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: _goToToday,
+                    child: Text(
+                      'Return to today',
+                      style: TextStyle(
+                        color: onSurface.withValues(alpha: 0.4),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 24),
+                if (_isToday) ...[
+                  _buildFocusCard(),
+                  const SizedBox(height: 16),
+                ],
+                _buildModeRibbon(),
+                const SizedBox(height: 24),
+                _buildLogMomentButton(),
+                const SizedBox(height: 16),
+                if (_todayEntries.isNotEmpty) ...[
+                  GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DailyDetailScreen(date: _selectedDate),
+                      ),
+                    ),
+                    child: _buildTodaySummary(),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+                _buildReflectionSection(),
+                const SizedBox(height: 48),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -419,9 +579,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildDailyPrompt() {
     final onSurface = Theme.of(context).colorScheme.onSurface;
-    final text = dailyPromptText(
-      hour: DateTime.now().hour,
-    );
+    final text = _isToday
+        ? dailyPromptText(hour: DateTime.now().hour)
+        : 'How did this day feel?';
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
