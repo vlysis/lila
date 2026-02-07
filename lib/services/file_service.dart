@@ -541,6 +541,49 @@ class FileService {
     return true;
   }
 
+  Future<bool> replaceEntry(LogEntry oldEntry, LogEntry newEntry) async {
+    final path = _dailyFilePath(oldEntry.timestamp);
+    final file = File(path);
+    if (!await file.exists()) return false;
+
+    final content = await file.readAsString();
+    final headerIndex = content.indexOf('## Entries');
+    if (headerIndex == -1) return false;
+
+    final headerLineEnd = content.indexOf('\n', headerIndex);
+    if (headerLineEnd == -1) return false;
+
+    final sectionStart = headerLineEnd + 1;
+    final afterSection = content.substring(sectionStart);
+    final nextSectionMatch = RegExp(r'\n## ').firstMatch(afterSection);
+    final sectionEnd = nextSectionMatch != null
+        ? sectionStart + nextSectionMatch.start
+        : content.length;
+
+    final section = content.substring(sectionStart, sectionEnd);
+    final blocks = section.split(RegExp(r'\n(?=- \*\*)'));
+    var replaced = false;
+    final updatedBlocks = <String>[];
+
+    for (final block in blocks) {
+      final parsed = LogEntry.fromMarkdown(block);
+      if (!replaced && parsed != null && _matchesEntry(oldEntry, parsed)) {
+        replaced = true;
+        updatedBlocks.add(newEntry.toMarkdown());
+        continue;
+      }
+      updatedBlocks.add(block);
+    }
+
+    if (!replaced) return false;
+    final updated =
+        content.substring(0, sectionStart) +
+        updatedBlocks.join('\n') +
+        content.substring(sectionEnd);
+    await file.writeAsString(updated);
+    return true;
+  }
+
   bool _matchesEntry(LogEntry target, LogEntry parsed) {
     final targetLabel =
         target.label?.trim().isNotEmpty == true ? target.label! : target.mode.label;

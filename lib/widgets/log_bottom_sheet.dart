@@ -7,8 +7,14 @@ import '../theme/lila_theme.dart';
 class LogBottomSheet extends StatefulWidget {
   final VoidCallback onLogged;
   final DateTime? date;
+  final LogEntry? editEntry;
 
-  const LogBottomSheet({super.key, required this.onLogged, this.date});
+  const LogBottomSheet({
+    super.key,
+    required this.onLogged,
+    this.date,
+    this.editEntry,
+  });
 
   @override
   State<LogBottomSheet> createState() => _LogBottomSheetState();
@@ -22,6 +28,8 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
   List<String> _recentLabels = [];
   bool _showLabel = false;
   bool _saving = false;
+
+  bool get _isEditMode => widget.editEntry != null;
 
   static const _orientationAssets = {
     LogOrientation.self_: 'assets/icons/self.png',
@@ -40,6 +48,14 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
   @override
   void initState() {
     super.initState();
+    if (_isEditMode) {
+      final e = widget.editEntry!;
+      _selectedMode = e.mode;
+      _selectedOrientation = e.orientation;
+      _selectedDuration = e.duration;
+      _label = e.label;
+      _showLabel = true;
+    }
     _loadRecentLabels();
   }
 
@@ -55,6 +71,24 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
     if (_selectedMode == null || _selectedOrientation == null || _saving) return;
 
     setState(() => _saving = true);
+
+    if (_isEditMode) {
+      final newEntry = LogEntry(
+        label: _label,
+        mode: _selectedMode!,
+        orientation: _selectedOrientation!,
+        duration: _selectedDuration,
+        season: widget.editEntry!.season,
+        timestamp: widget.editEntry!.timestamp,
+      );
+
+      HapticFeedback.mediumImpact();
+
+      if (mounted) {
+        Navigator.of(context).pop(newEntry);
+      }
+      return;
+    }
 
     final now = DateTime.now();
     final ts = widget.date != null
@@ -113,6 +147,30 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
     });
   }
 
+  void _editMode() {
+    setState(() {
+      _selectedMode = null;
+      _selectedOrientation = null;
+      _selectedDuration = null;
+      _showLabel = false;
+    });
+  }
+
+  void _editOrientation() {
+    setState(() {
+      _selectedOrientation = null;
+      _selectedDuration = null;
+      _showLabel = false;
+    });
+  }
+
+  void _editDuration() {
+    setState(() {
+      _selectedDuration = null;
+      _showLabel = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
@@ -162,7 +220,7 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
 
             // Orientation selection
             if (_selectedMode != null && _selectedOrientation == null) ...[
-              _buildSelectedModeBadge(),
+              _buildSelectedModeBadge(tappable: _isEditMode),
               const SizedBox(height: 24),
               Text(
                 'Directed toward?',
@@ -179,9 +237,9 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
             if (_selectedMode != null &&
                 _selectedOrientation != null &&
                 !_showLabel) ...[
-              _buildSelectedModeBadge(),
+              _buildSelectedModeBadge(tappable: _isEditMode),
               const SizedBox(height: 8),
-              _buildSelectedOrientationBadge(),
+              _buildSelectedOrientationBadge(tappable: _isEditMode),
               const SizedBox(height: 24),
               Text(
                 'How long?',
@@ -200,12 +258,12 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
             if (_selectedMode != null &&
                 _selectedOrientation != null &&
                 _showLabel) ...[
-              _buildSelectedModeBadge(),
+              _buildSelectedModeBadge(tappable: _isEditMode),
               const SizedBox(height: 8),
-              _buildSelectedOrientationBadge(),
+              _buildSelectedOrientationBadge(tappable: _isEditMode),
               if (_selectedDuration != null) ...[
                 const SizedBox(height: 8),
-                _buildSelectedDurationBadge(),
+                _buildSelectedDurationBadge(tappable: _isEditMode),
               ],
               const SizedBox(height: 24),
               _buildLabelInput(),
@@ -264,10 +322,11 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
     );
   }
 
-  Widget _buildSelectedModeBadge() {
+  Widget _buildSelectedModeBadge({bool tappable = false}) {
     final mode = _selectedMode!;
     final color = context.lilaPalette.modeColor(mode);
-    return Container(
+    final badge = Container(
+      key: const ValueKey('mode_badge'),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
@@ -286,6 +345,11 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
         ],
       ),
     );
+
+    if (tappable) {
+      return GestureDetector(onTap: _editMode, child: badge);
+    }
+    return badge;
   }
 
   Widget _buildOrientationSelector() {
@@ -343,10 +407,11 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
     );
   }
 
-  Widget _buildSelectedOrientationBadge() {
+  Widget _buildSelectedOrientationBadge({bool tappable = false}) {
     final s = context.lilaSurface;
     final o = _selectedOrientation!;
-    return Container(
+    final badge = Container(
+      key: const ValueKey('orientation_badge'),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: s.overlay,
@@ -373,6 +438,11 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
         ],
       ),
     );
+
+    if (tappable) {
+      return GestureDetector(onTap: _editOrientation, child: badge);
+    }
+    return badge;
   }
 
   Widget _buildDurationSelector() {
@@ -435,10 +505,11 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
     );
   }
 
-  Widget _buildSelectedDurationBadge() {
+  Widget _buildSelectedDurationBadge({bool tappable = false}) {
     final d = _selectedDuration!;
     final modeColor = context.lilaPalette.modeColor(_selectedMode!);
-    return Container(
+    final badge = Container(
+      key: const ValueKey('duration_badge'),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: modeColor.withValues(alpha: 0.1),
@@ -452,6 +523,11 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
         ),
       ),
     );
+
+    if (tappable) {
+      return GestureDetector(onTap: _editDuration, child: badge);
+    }
+    return badge;
   }
 
   Widget _buildLabelInput() {
@@ -462,6 +538,11 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
         TextField(
           autofocus: false,
           style: TextStyle(color: s.foreground),
+          controller: _isEditMode
+              ? (TextEditingController(text: _label ?? '')
+                ..selection = TextSelection.fromPosition(
+                    TextPosition(offset: (_label ?? '').length)))
+              : null,
           decoration: InputDecoration(
             hintText: 'What was it?',
             hintStyle: TextStyle(color: s.textFaint),
@@ -512,9 +593,13 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
 
   Widget _buildSaveButton() {
     final s = context.lilaSurface;
+    final buttonText = _isEditMode
+        ? 'Save'
+        : (_label?.isNotEmpty == true ? 'Log' : 'Log without label');
     return SizedBox(
       width: double.infinity,
       child: TextButton(
+        key: const ValueKey('log_save_button'),
         onPressed: _saving ? null : _saveEntry,
         style: TextButton.styleFrom(
           backgroundColor: s.overlay,
@@ -524,7 +609,7 @@ class _LogBottomSheetState extends State<LogBottomSheet> {
           ),
         ),
         child: Text(
-          _label?.isNotEmpty == true ? 'Log' : 'Log without label',
+          buttonText,
           style: TextStyle(
             color: s.textSecondary,
             fontSize: 15,

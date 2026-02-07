@@ -6,12 +6,14 @@ class ArmedSwipeToDelete extends StatefulWidget {
   final Key dismissKey;
   final Widget child;
   final Future<void> Function() onDelete;
+  final Future<void> Function()? onEdit;
   final String? semanticsLabel;
 
   const ArmedSwipeToDelete({
     required this.dismissKey,
     required this.child,
     required this.onDelete,
+    this.onEdit,
     this.semanticsLabel,
     super.key,
   });
@@ -19,6 +21,8 @@ class ArmedSwipeToDelete extends StatefulWidget {
   @override
   State<ArmedSwipeToDelete> createState() => _ArmedSwipeToDeleteState();
 }
+
+enum _RevealSide { none, delete, edit }
 
 class _ArmedSwipeToDeleteState extends State<ArmedSwipeToDelete>
     with SingleTickerProviderStateMixin {
@@ -28,8 +32,9 @@ class _ArmedSwipeToDeleteState extends State<ArmedSwipeToDelete>
   late final AnimationController _controller;
   late Animation<double> _offsetAnimation;
   double _currentOffset = 0;
-  bool _revealed = false;
+  _RevealSide _revealSide = _RevealSide.none;
   final GlobalKey _deletePillKey = GlobalKey();
+  final GlobalKey _editPillKey = GlobalKey();
 
   @override
   void dispose() {
@@ -51,6 +56,11 @@ class _ArmedSwipeToDeleteState extends State<ArmedSwipeToDelete>
       });
   }
 
+  bool get _hasEdit => widget.onEdit != null;
+
+  double get _minOffset => -_revealWidth;
+  double get _maxOffset => _hasEdit ? _revealWidth : 0.0;
+
   void _animateTo(double target) {
     _offsetAnimation = Tween<double>(begin: _currentOffset, end: target).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeOut),
@@ -61,43 +71,53 @@ class _ArmedSwipeToDeleteState extends State<ArmedSwipeToDelete>
   }
 
   void _handleDragStart(DragStartDetails details) {
-    if (_revealed) return;
+    if (_revealSide != _RevealSide.none) return;
     _controller.stop();
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
-    if (_revealed) return;
+    if (_revealSide != _RevealSide.none) return;
     final next =
-        (_currentOffset + details.delta.dx).clamp(-_revealWidth, 0.0);
+        (_currentOffset + details.delta.dx).clamp(_minOffset, _maxOffset);
     setState(() => _currentOffset = next);
   }
 
   void _handleDragEnd(DragEndDetails details) {
-    if (_revealed) return;
+    if (_revealSide != _RevealSide.none) return;
     if (_currentOffset <= -_revealThreshold) {
       HapticFeedback.selectionClick();
-      _revealed = true;
+      _revealSide = _RevealSide.delete;
       _animateTo(-_revealWidth);
+    } else if (_hasEdit && _currentOffset >= _revealThreshold) {
+      HapticFeedback.selectionClick();
+      _revealSide = _RevealSide.edit;
+      _animateTo(_revealWidth);
     } else {
       _animateTo(0);
     }
   }
 
   Future<void> _handleDelete() async {
-    _revealed = false;
+    _revealSide = _RevealSide.none;
     _animateTo(0);
     await widget.onDelete();
   }
 
+  Future<void> _handleEdit() async {
+    _revealSide = _RevealSide.none;
+    _animateTo(0);
+    await widget.onEdit!();
+  }
+
   void _dismissReveal() {
-    if (_revealed) {
-      _revealed = false;
+    if (_revealSide != _RevealSide.none) {
+      _revealSide = _RevealSide.none;
       _animateTo(0);
     }
   }
 
-  bool _isPointerOnDelete(Offset position) {
-    final context = _deletePillKey.currentContext;
+  bool _isPointerOnPill(Offset position, GlobalKey key) {
+    final context = key.currentContext;
     if (context == null) return false;
     final box = context.findRenderObject() as RenderBox?;
     if (box == null || !box.attached) return false;
@@ -115,14 +135,16 @@ class _ArmedSwipeToDeleteState extends State<ArmedSwipeToDelete>
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
       decoration: BoxDecoration(
-        color: _revealed
+        color: _revealSide != _RevealSide.none
             ? context.lilaSurface.overlay.withValues(alpha: 0.03)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(radii.medium),
         border: Border.all(
-          color: _revealed
+          color: _revealSide == _RevealSide.delete
               ? const Color(0xFFA87B6B).withValues(alpha: 0.35)
-              : Colors.transparent,
+              : _revealSide == _RevealSide.edit
+                  ? const Color(0xFF718096).withValues(alpha: 0.35)
+                  : Colors.transparent,
         ),
       ),
       child: widget.child,
@@ -133,12 +155,15 @@ class _ArmedSwipeToDeleteState extends State<ArmedSwipeToDelete>
         final width = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : null;
-        final showBackground = _currentOffset < 0;
+        final showDeleteBg = _currentOffset < 0;
+        final showEditBg = _currentOffset > 0;
 
         return Listener(
           behavior: HitTestBehavior.translucent,
           onPointerDown: (event) {
-            if (_revealed && !_isPointerOnDelete(event.position)) {
+            if (_revealSide != _RevealSide.none &&
+                !_isPointerOnPill(event.position, _deletePillKey) &&
+                !_isPointerOnPill(event.position, _editPillKey)) {
               _dismissReveal();
             }
           },
@@ -152,16 +177,32 @@ class _ArmedSwipeToDeleteState extends State<ArmedSwipeToDelete>
             child: ClipRRect(
               borderRadius: BorderRadius.circular(radii.medium),
               child: Stack(
-                alignment: Alignment.centerRight,
                 children: [
-                  AnimatedOpacity(
-                    opacity: showBackground ? 1 : 0,
-                    duration: const Duration(milliseconds: 120),
-                    child: SizedBox(
-                      width: width,
-                      child: _buildDeleteBackground(context),
+                  // Delete background (right side)
+                  if (showDeleteBg)
+                    Positioned.fill(
+                      child: AnimatedOpacity(
+                        opacity: 1,
+                        duration: const Duration(milliseconds: 120),
+                        child: SizedBox(
+                          width: width,
+                          child: _buildDeleteBackground(context),
+                        ),
+                      ),
                     ),
-                  ),
+                  // Edit background (left side)
+                  if (showEditBg)
+                    Positioned.fill(
+                      child: AnimatedOpacity(
+                        opacity: 1,
+                        duration: const Duration(milliseconds: 120),
+                        child: SizedBox(
+                          width: width,
+                          child: _buildEditBackground(context),
+                        ),
+                      ),
+                    ),
+                  // Main content
                   SizedBox(
                     width: width,
                     child: Transform.translate(
@@ -169,52 +210,110 @@ class _ArmedSwipeToDeleteState extends State<ArmedSwipeToDelete>
                       child: child,
                     ),
                   ),
-                  AnimatedOpacity(
-                    key: const ValueKey('armed_delete_opacity'),
-                    opacity: _revealed ? 1 : 0,
-                    duration: const Duration(milliseconds: 180),
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: GestureDetector(
-                        onTap: _handleDelete,
-                        child: SizedBox(
-                          key: _deletePillKey,
-                      child: Container(
-                        key: const ValueKey('armed_delete_pill'),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFA87B6B)
-                              .withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(radii.small),
-                          border: Border.all(
-                            color: const Color(0xFFA87B6B)
-                                .withValues(alpha: 0.5),
-                          ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.delete_outline,
-                                  color: context.lilaSurface.textSecondary,
-                                  size: 16,
+                  // Delete pill (right side)
+                  Positioned(
+                    right: 8,
+                    top: 0,
+                    bottom: 0,
+                    child: AnimatedOpacity(
+                      key: const ValueKey('armed_delete_opacity'),
+                      opacity: _revealSide == _RevealSide.delete ? 1 : 0,
+                      duration: const Duration(milliseconds: 180),
+                      child: Center(
+                        child: GestureDetector(
+                          onTap: _handleDelete,
+                          child: SizedBox(
+                            key: _deletePillKey,
+                            child: Container(
+                              key: const ValueKey('armed_delete_pill'),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFA87B6B)
+                                    .withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(radii.small),
+                                border: Border.all(
+                                  color: const Color(0xFFA87B6B)
+                                      .withValues(alpha: 0.5),
                                 ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Delete',
-                                  style: TextStyle(
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.delete_outline,
                                     color: context.lilaSurface.textSecondary,
-                                    fontSize: 12,
+                                    size: 16,
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Delete',
+                                    style: TextStyle(
+                                      color: context.lilaSurface.textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
                   ),
+                  // Edit pill (left side)
+                  if (_hasEdit)
+                    Positioned(
+                      left: 8,
+                      top: 0,
+                      bottom: 0,
+                      child: AnimatedOpacity(
+                        key: const ValueKey('armed_edit_opacity'),
+                        opacity: _revealSide == _RevealSide.edit ? 1 : 0,
+                        duration: const Duration(milliseconds: 180),
+                        child: Center(
+                          child: GestureDetector(
+                            onTap: _handleEdit,
+                            child: SizedBox(
+                              key: _editPillKey,
+                              child: Container(
+                                key: const ValueKey('armed_edit_pill'),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF718096)
+                                      .withValues(alpha: 0.18),
+                                  borderRadius:
+                                      BorderRadius.circular(radii.small),
+                                  border: Border.all(
+                                    color: const Color(0xFF718096)
+                                        .withValues(alpha: 0.5),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.edit_outlined,
+                                      color: context.lilaSurface.textSecondary,
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Edit',
+                                      style: TextStyle(
+                                        color: context.lilaSurface.textSecondary,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -229,6 +328,16 @@ class _ArmedSwipeToDeleteState extends State<ArmedSwipeToDelete>
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFFA87B6B).withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(radii.medium),
+      ),
+    );
+  }
+
+  Widget _buildEditBackground(BuildContext context) {
+    final radii = context.lilaRadii;
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF718096).withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(radii.medium),
       ),
     );

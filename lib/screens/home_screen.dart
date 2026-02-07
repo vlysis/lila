@@ -1200,6 +1200,26 @@ class _HomeScreenState extends State<HomeScreen> {
           _refreshAvailableDates();
         }
       },
+      onEdit: () async {
+        final result = await showModalBottomSheet<LogEntry>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => LogBottomSheet(
+            onLogged: () {},
+            date: _selectedDate,
+            editEntry: entry,
+          ),
+        );
+        if (result != null) {
+          final fs = await FileService.getInstance();
+          await fs.replaceEntry(entry, result);
+          if (mounted) {
+            await _loadEntries();
+            _refreshAvailableDates();
+          }
+        }
+      },
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Container(
