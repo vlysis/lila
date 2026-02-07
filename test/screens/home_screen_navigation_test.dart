@@ -8,6 +8,7 @@ import 'package:lila/models/log_entry.dart';
 import 'package:lila/screens/home_screen.dart';
 import 'package:lila/services/file_service.dart';
 import 'package:lila/services/focus_controller.dart';
+import 'package:lila/services/reminder_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -22,32 +23,34 @@ void main() {
 
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/path_provider'),
-      (MethodCall call) async {
-        if (call.method == 'getApplicationDocumentsDirectory') {
-          return fakeDocs;
-        }
-        return null;
-      },
-    );
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (MethodCall call) async {
+            if (call.method == 'getApplicationDocumentsDirectory') {
+              return fakeDocs;
+            }
+            return null;
+          },
+        );
 
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/path_provider_macos'),
-      (MethodCall call) async {
-        if (call.method == 'getApplicationDocumentsDirectory') {
-          return fakeDocs;
-        }
-        return null;
-      },
-    );
+          const MethodChannel('plugins.flutter.io/path_provider_macos'),
+          (MethodCall call) async {
+            if (call.method == 'getApplicationDocumentsDirectory') {
+              return fakeDocs;
+            }
+            return null;
+          },
+        );
 
     SharedPreferences.setMockInitialValues({});
     FileService.resetInstance();
+    ReminderService.resetInstance();
   });
 
   tearDown(() {
     FileService.resetInstance();
+    ReminderService.resetInstance();
     tempDir.deleteSync(recursive: true);
   });
 
@@ -60,9 +63,7 @@ void main() {
     });
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: HomeScreen(focusController: controller),
-      ),
+      MaterialApp(home: HomeScreen(focusController: controller)),
     );
 
     await tester.runAsync(() async {
@@ -91,7 +92,12 @@ void main() {
           mode: Mode.growth,
           orientation: LogOrientation.self_,
           timestamp: DateTime(
-              yesterday.year, yesterday.month, yesterday.day, 14, 30),
+            yesterday.year,
+            yesterday.month,
+            yesterday.day,
+            14,
+            30,
+          ),
         ),
       );
     });
@@ -110,7 +116,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('Yesterday'), findsOneWidget);
-    expect(find.text('Yesterday task'), findsOneWidget);
+    final entries = homeState(tester).visibleEntriesForTest() as List<LogEntry>;
+    expect(entries.any((e) => e.label == 'Yesterday task'), isTrue);
     expect(find.text('Return to today'), findsOneWidget);
   });
 
@@ -126,7 +133,12 @@ void main() {
           mode: Mode.maintenance,
           orientation: LogOrientation.other,
           timestamp: DateTime(
-              yesterday.year, yesterday.month, yesterday.day, 10, 0),
+            yesterday.year,
+            yesterday.month,
+            yesterday.day,
+            10,
+            0,
+          ),
         ),
       );
     });
@@ -167,7 +179,12 @@ void main() {
           mode: Mode.drift,
           orientation: LogOrientation.self_,
           timestamp: DateTime(
-              yesterday.year, yesterday.month, yesterday.day, 9, 0),
+            yesterday.year,
+            yesterday.month,
+            yesterday.day,
+            9,
+            0,
+          ),
         ),
       );
     });
@@ -207,7 +224,12 @@ void main() {
           mode: Mode.growth,
           orientation: LogOrientation.self_,
           timestamp: DateTime(
-              yesterday.year, yesterday.month, yesterday.day, 12, 0),
+            yesterday.year,
+            yesterday.month,
+            yesterday.day,
+            12,
+            0,
+          ),
         ),
       );
     });
@@ -243,7 +265,12 @@ void main() {
           mode: Mode.growth,
           orientation: LogOrientation.self_,
           timestamp: DateTime(
-              yesterday.year, yesterday.month, yesterday.day, 10, 0),
+            yesterday.year,
+            yesterday.month,
+            yesterday.day,
+            10,
+            0,
+          ),
         ),
       );
       await fs.saveDailyReflection(yesterday, 'Yesterday reflection text');
@@ -255,8 +282,9 @@ void main() {
     await pumpHome(tester, controller);
 
     // Verify today's reflection
-    final reflectionField =
-        find.byKey(const ValueKey('daily_reflection_input'));
+    final reflectionField = find.byKey(
+      const ValueKey('daily_reflection_input'),
+    );
     expect(reflectionField, findsOneWidget);
     final textField = tester.widget<TextField>(reflectionField);
     expect(textField.controller?.text, 'Today reflection text');
@@ -269,8 +297,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     // Verify yesterday's reflection loaded
-    final reflectionField2 =
-        find.byKey(const ValueKey('daily_reflection_input'));
+    final reflectionField2 = find.byKey(
+      const ValueKey('daily_reflection_input'),
+    );
     final textField2 = tester.widget<TextField>(reflectionField2);
     expect(textField2.controller?.text, 'Yesterday reflection text');
   });

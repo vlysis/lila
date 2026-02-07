@@ -192,7 +192,7 @@ class FileService {
   }
 
   Future<void> _ensureDirectories() async {
-    final dirs = ['Daily', 'Activities', 'Weekly', 'Meta', 'Trash'];
+    final dirs = ['Daily', 'Activities', 'Weekly', 'Meta', 'Trash', 'Reminders'];
     for (final dir in dirs) {
       await Directory('$_rootDir/$dir').create(recursive: true);
     }

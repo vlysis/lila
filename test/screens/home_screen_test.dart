@@ -8,6 +8,7 @@ import 'package:lila/models/log_entry.dart';
 import 'package:lila/screens/home_screen.dart';
 import 'package:lila/services/file_service.dart';
 import 'package:lila/services/focus_controller.dart';
+import 'package:lila/services/reminder_service.dart';
 import 'package:lila/logic/daily_prompt.dart';
 
 void main() {
@@ -23,37 +24,40 @@ void main() {
 
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/path_provider'),
-      (MethodCall call) async {
-        if (call.method == 'getApplicationDocumentsDirectory') {
-          return fakeDocs;
-        }
-        return null;
-      },
-    );
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (MethodCall call) async {
+            if (call.method == 'getApplicationDocumentsDirectory') {
+              return fakeDocs;
+            }
+            return null;
+          },
+        );
 
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/path_provider_macos'),
-      (MethodCall call) async {
-        if (call.method == 'getApplicationDocumentsDirectory') {
-          return fakeDocs;
-        }
-        return null;
-      },
-    );
+          const MethodChannel('plugins.flutter.io/path_provider_macos'),
+          (MethodCall call) async {
+            if (call.method == 'getApplicationDocumentsDirectory') {
+              return fakeDocs;
+            }
+            return null;
+          },
+        );
 
     SharedPreferences.setMockInitialValues({});
     FileService.resetInstance();
+    ReminderService.resetInstance();
   });
 
   tearDown(() {
     FileService.resetInstance();
+    ReminderService.resetInstance();
     tempDir.deleteSync(recursive: true);
   });
 
-  testWidgets('daily reflection summary shows reflection text and tag',
-      (tester) async {
+  testWidgets('daily reflection summary shows reflection text and tag', (
+    tester,
+  ) async {
     final now = DateTime.now();
     await tester.runAsync(() async {
       final fs = await FileService.getInstance();
@@ -80,9 +84,7 @@ void main() {
     controller.update(FocusState.defaultState());
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: HomeScreen(focusController: controller),
-      ),
+      MaterialApp(home: HomeScreen(focusController: controller)),
     );
     await tester.runAsync(() async {
       await (tester.state(find.byType(HomeScreen)) as dynamic)
@@ -122,9 +124,7 @@ void main() {
     controller.update(FocusState.defaultState());
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: HomeScreen(focusController: controller),
-      ),
+      MaterialApp(home: HomeScreen(focusController: controller)),
     );
     await tester.runAsync(() async {
       await (tester.state(find.byType(HomeScreen)) as dynamic)
@@ -135,15 +135,14 @@ void main() {
     expect(find.byKey(const ValueKey('mode_ribbon')), findsOneWidget);
   });
 
-  testWidgets('log moment button opens log sheet and replaces FAB',
-      (tester) async {
+  testWidgets('log moment button opens log sheet and replaces FAB', (
+    tester,
+  ) async {
     final controller = FocusController();
     controller.update(FocusState.defaultState());
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: HomeScreen(focusController: controller),
-      ),
+      MaterialApp(home: HomeScreen(focusController: controller)),
     );
 
     expect(find.byType(FloatingActionButton), findsNothing);
@@ -166,15 +165,15 @@ void main() {
     controller.update(FocusState.defaultState());
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: HomeScreen(focusController: controller),
-      ),
+      MaterialApp(home: HomeScreen(focusController: controller)),
     );
 
     final prompt = dailyPromptText(hour: DateTime.now().hour);
     expect(find.text(prompt), findsAtLeastNWidgets(1));
 
-    final reflectionField = find.byKey(const ValueKey('daily_reflection_input'));
+    final reflectionField = find.byKey(
+      const ValueKey('daily_reflection_input'),
+    );
     expect(reflectionField, findsOneWidget);
 
     await tester.enterText(reflectionField, 'Grounded and steady.');
@@ -210,9 +209,7 @@ void main() {
     controller.update(FocusState.defaultState());
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: HomeScreen(focusController: controller),
-      ),
+      MaterialApp(home: HomeScreen(focusController: controller)),
     );
     await tester.runAsync(() async {
       await (tester.state(find.byType(HomeScreen)) as dynamic)

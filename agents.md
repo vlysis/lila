@@ -32,6 +32,7 @@ flutter test               # run tests
   - `Weekly/YYYY-Www.md` — auto-generated weekly summaries + user reflections
   - `Meta/modes.md` — mode definitions
   - `Trash/YYYY-MM-DD.md` — soft-deleted moments (permanent unless deleted manually)
+  - `Reminders/YYYY-MM-DD.md` — one-time reminders, alarm offsets, and done state
   - Vault backups can be created/restored from Settings. Backups copy the entire vault
     into a timestamped folder inside a user-chosen destination.
 
@@ -41,16 +42,19 @@ flutter test               # run tests
 lib/
   main.dart                        # Entry point, dark theme, LilaApp widget
   models/log_entry.dart            # Mode, LogOrientation, LogEntry (with MD serialization)
+  models/reminder.dart             # Reminder model with Markdown serialization
   services/
     file_service.dart              # File I/O: create/append/read daily + weekly .md files, daily/weekly reflections, available dates
     focus_controller.dart          # Current intention + brightness (light/dark) state
+    reminder_service.dart          # Reminder file I/O, done-state updates, and date discovery
+    reminder_alarm_scheduler.dart  # Alarm scheduling interface + Android method-channel implementation
     claude_service.dart            # Claude API key storage, integration toggle, format validation
     claude_api_client.dart         # Dio HTTP client for Claude API with retry, error handling, log redaction
     claude_usage_service.dart      # Token usage tracking, daily caps, UTC midnight reset
     synthetic_data_service.dart    # Generates 7 days of test data (debug only)
     weekly_summary_service.dart    # Builds weekly markdown summaries
   screens/
-    home_screen.dart               # Day view with horizontal swipe navigation, mode ribbon, moments list, Log Moment button, reflection input, trash + garden icons
+    home_screen.dart               # Day view with horizontal swipe navigation, mode ribbon, moments + reminders list, Log Moment + Set Alarm buttons, reflection input, trash + garden icons
     daily_detail_screen.dart       # Read-only entry list with mode/orientation badges
     daily_reflection_screen.dart   # Legacy full-screen reflection view (home screen now hosts reflection)
     intention_flow_screen.dart     # Intention selector (Builder/Sanctuary/Explorer/Grounded)
@@ -60,6 +64,7 @@ lib/
     settings_screen.dart           # Vault path (changeable), Obsidian info, reset vault, test data
   widgets/
     log_bottom_sheet.dart          # Log flow: mode grid → orientation → duration presets → optional label; accepts optional date for past-day logging
+    reminder_bottom_sheet.dart     # Reminder flow: text → day → time → alarm offset; saves one-time reminder
     whisper.dart                   # Reflection text based on today's entries
     weekly_whisper.dart            # Single-line weekly reflection (first-match rule)
     weekly_insights_widget.dart    # Multi-insight cards (mode balance, rhythm, streaks, arcs)
@@ -78,6 +83,7 @@ lib/
   - Maintenance: quick, routine, heavy
   - Drift: energizing, short, spiral (stored values remain `brief`, `lost`, `spiral`)
 - **LogEntry:** ephemeral — immediately serialized to Markdown, never stored as objects
+- **Reminder:** one-time item with `remind_at`, optional pre-alert offset, and `done` lifecycle state
 - **FileService:** singleton with `@visibleForTesting resetInstance()` for test isolation
 - Flutter's `Orientation` conflicts with ours, so the enum is named `LogOrientation`
  - **FocusSeason:** Builder, Sanctuary, Explorer, Grounded (Anchor). Explorer is the default.
@@ -94,6 +100,20 @@ lib/
 ```
 
 Duration is optional and omitted if the user skips the duration step.
+
+## Reminder Markdown Format
+
+```markdown
+- **Get eggs**
+  id:: rem_1738967000000_12345_1739042400000
+  remind_at:: 2026-02-07T15:00:00-08:00
+  alert_offset_min:: 0
+  created_at:: 2026-02-06T11:42:00-08:00
+  done:: false
+  done_at::
+```
+
+`done_at` remains empty until the reminder is completed.
 
 ## Design Constraints
 
@@ -150,6 +170,24 @@ Trash screen (trash icon + label on home AppBar) allows:
 2. Swipe right to restore a trashed moment to its original day.
 3. Empty state copy when no deleted moments exist.
 
+## Reminders
+
+Reminders are one-time alarms created from the home screen:
+1. Tap **Set Alarm** (right of **Log Moment**) to open the reminder sheet.
+2. Enter text, choose day/time (today + next 6 days), and choose alarm timing.
+3. Reminder is saved to `Reminders/YYYY-MM-DD.md` and rendered in the day timeline with distinct reminder styling.
+4. Tapping a reminder card marks it done.
+
+Android alarm behavior:
+- Uses `AlarmManager` + local notification receiver for alarm-like reminders.
+- Requests notification permission on first use where required.
+- Uses exact alarms when allowed; falls back to inexact scheduling if exact permission is unavailable.
+- Tapping notification routes reminder ID back into Flutter and marks reminder done.
+- Native wiring lives in:
+  - `android/app/src/main/kotlin/com/lila/lila/MainActivity.kt`
+  - `android/app/src/main/kotlin/com/lila/lila/ReminderAlarmReceiver.kt`
+  - `android/app/src/main/kotlin/com/lila/lila/ReminderAlarmContract.kt`
+
 ## Daily Reflection
 
 Daily reflection now lives on the **home screen**:
@@ -174,7 +212,9 @@ The `daily_reflection_screen.dart` file remains but is no longer the primary UI.
 The home screen supports horizontal swipe navigation between days:
 - **Swipe right** to go to a previous day, **swipe left** to return toward today
 - Only dates with existing data (plus today) are navigable
-- `FileService.getAvailableDates()` scans `Daily/` for `.md` files to build the date list
+- Date list merges:
+  - `FileService.getAvailableDates()` from `Daily/`
+  - `ReminderService.getAvailableDates()` from `Reminders/`
 - Title shows "Today", "Yesterday", or the day name (e.g. "Thursday")
 - Date subtitle shows full date (e.g. "Thursday, February 6")
 - "Return to today" link appears when viewing a past day

@@ -2,13 +2,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/log_entry.dart';
+import '../models/reminder.dart';
 import '../models/focus_state.dart';
 import '../services/file_service.dart';
 import '../services/focus_controller.dart';
+import '../services/reminder_service.dart';
 import '../logic/daily_prompt.dart';
 import '../theme/lila_theme.dart';
 import '../widgets/armed_swipe_to_delete.dart';
 import '../widgets/log_bottom_sheet.dart';
+import '../widgets/reminder_bottom_sheet.dart';
 import 'daily_detail_screen.dart';
 import 'intention_flow_screen.dart';
 import 'settings_screen.dart';
@@ -27,6 +30,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   List<LogEntry> _todayEntries = [];
+  List<Reminder> _dayReminders = [];
   String _dailyReflection = '';
   FocusState _focusState = FocusState.defaultState();
   bool _focusLoading = true;
@@ -50,6 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _reflectionController = TextEditingController();
   final FocusNode _reflectionFocusNode = FocusNode();
   Timer? _reflectionSaveTimer;
+  StreamSubscription<String>? _reminderDoneSub;
 
   DateTime _today() {
     final now = DateTime.now();
@@ -91,6 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _selectedDate = _today();
     _loadEntries();
     _refreshAvailableDates();
+    _initReminderNotifications();
     _focusState = widget.focusController.state;
     _focusLoading = widget.focusController.isLoading;
     widget.focusController.addListener(_handleFocusChange);
@@ -99,6 +105,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     widget.focusController.removeListener(_handleFocusChange);
+    _reminderDoneSub?.cancel();
     _reflectionSaveTimer?.cancel();
     _saveReflectionNow();
     _reflectionController.dispose();
@@ -107,28 +114,55 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  Future<void> _initReminderNotifications() async {
+    _reminderDoneSub = ReminderService.instance.notificationDoneStream.listen((
+      _,
+    ) async {
+      await _loadEntries();
+      await _refreshAvailableDates();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Reminder marked done'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    });
+    await ReminderService.instance.initialize();
+  }
+
   Future<void> _loadEntries() async {
     final fs = await FileService.getInstance();
     final date = _selectedDate;
     final result = await fs.readDailyEntriesAndReflection(date);
-    if (mounted) {
-      final previousReflection = _dailyReflection;
-      setState(() {
-        _todayEntries = result.entries;
-        _dailyReflection = result.reflection;
-        if (!_reflectionLoaded ||
-            _reflectionController.text == previousReflection) {
-          _reflectionController.text = result.reflection;
-          _lastSavedReflection = result.reflection;
-          _reflectionLoaded = true;
-        }
-      });
-    }
+    final reminders = await ReminderService.instance.readRemindersForDate(date);
+    if (!mounted) return;
+
+    final isStillSelected =
+        _selectedDate.year == date.year &&
+        _selectedDate.month == date.month &&
+        _selectedDate.day == date.day;
+    if (!isStillSelected) return;
+
+    final previousReflection = _dailyReflection;
+    setState(() {
+      _todayEntries = result.entries;
+      _dayReminders = reminders;
+      _dailyReflection = result.reflection;
+      if (!_reflectionLoaded ||
+          _reflectionController.text == previousReflection) {
+        _reflectionController.text = result.reflection;
+        _lastSavedReflection = result.reflection;
+        _reflectionLoaded = true;
+      }
+    });
   }
 
   Future<void> _refreshAvailableDates() async {
     final fs = await FileService.getInstance();
-    final dates = await fs.getAvailableDates();
+    final dailyDates = await fs.getAvailableDates();
+    final reminderDates = await ReminderService.instance.getAvailableDates();
+    final dates = <DateTime>{...dailyDates, ...reminderDates}.toList()..sort();
     if (mounted) {
       setState(() {
         _availableDates = dates;
@@ -150,6 +184,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @visibleForTesting
   Future<void> goToTodayForTest() => _goToToday();
+
+  @visibleForTesting
+  List<LogEntry> visibleEntriesForTest() =>
+      List<LogEntry>.unmodifiable(_todayEntries);
 
   void _handleFocusChange() {
     if (!mounted) return;
@@ -174,6 +212,27 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _openReminderSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ReminderBottomSheet(
+        onSaved: () {
+          _loadEntries();
+          _refreshAvailableDates();
+        },
+      ),
+    );
+  }
+
+  Future<void> _markReminderDone(Reminder reminder) async {
+    final updated = await ReminderService.instance.markReminderDone(reminder);
+    if (!updated || !mounted) return;
+    await _loadEntries();
+    await _refreshAvailableDates();
+  }
+
   void _scrollToReflection() {
     final targetContext = _reflectionFocusNode.context;
     if (targetContext != null) {
@@ -191,8 +250,10 @@ class _HomeScreenState extends State<HomeScreen> {
       _dailyReflection = text;
     });
     _reflectionSaveTimer?.cancel();
-    _reflectionSaveTimer =
-        Timer(const Duration(seconds: 1), _saveReflectionNow);
+    _reflectionSaveTimer = Timer(
+      const Duration(seconds: 1),
+      _saveReflectionNow,
+    );
   }
 
   Future<void> _saveReflectionNow() async {
@@ -216,8 +277,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final now = DateTime.now();
     final ts = _isToday
         ? now
-        : DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day,
-            now.hour, now.minute, now.second);
+        : DateTime(
+            _selectedDate.year,
+            _selectedDate.month,
+            _selectedDate.day,
+            now.hour,
+            now.minute,
+            now.second,
+          );
 
     final entry = LogEntry(
       label: 'Daily reflection',
@@ -326,7 +393,10 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const TrashScreen()),
-              ).then((_) { _loadEntries(); _refreshAvailableDates(); });
+              ).then((_) {
+                _loadEntries();
+                _refreshAvailableDates();
+              });
             },
             child: Container(
               alignment: Alignment.center,
@@ -367,7 +437,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   MaterialPageRoute(
                     builder: (_) => const VisualizationScreen(),
                   ),
-                ).then((_) { _loadEntries(); _refreshAvailableDates(); });
+                ).then((_) {
+                  _loadEntries();
+                  _refreshAvailableDates();
+                });
               },
               child: Container(
                 width: 54,
@@ -386,15 +459,20 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () {
                 final ref = _selectedDate;
                 final monday = ref.subtract(Duration(days: ref.weekday - 1));
-                final weekStart =
-                    DateTime(monday.year, monday.month, monday.day);
+                final weekStart = DateTime(
+                  monday.year,
+                  monday.month,
+                  monday.day,
+                );
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) =>
-                        WeeklyReviewScreen(weekStart: weekStart),
+                    builder: (_) => WeeklyReviewScreen(weekStart: weekStart),
                   ),
-                ).then((_) { _loadEntries(); _refreshAvailableDates(); });
+                ).then((_) {
+                  _loadEntries();
+                  _refreshAvailableDates();
+                });
               },
               child: Container(
                 width: 54,
@@ -410,10 +488,18 @@ class _HomeScreenState extends State<HomeScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => SettingsScreen(focusController: widget.focusController)),
-              ).then((_) { _loadEntries(); _refreshAvailableDates(); }),
+              onTap: () =>
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SettingsScreen(
+                        focusController: widget.focusController,
+                      ),
+                    ),
+                  ).then((_) {
+                    _loadEntries();
+                    _refreshAvailableDates();
+                  }),
               child: Container(
                 width: 54,
                 height: 54,
@@ -441,7 +527,9 @@ class _HomeScreenState extends State<HomeScreen> {
           transitionBuilder: (child, animation) {
             final offset = Tween<Offset>(
               begin: Offset(
-                  _slideDirection == 0 ? 0 : -_slideDirection.toDouble(), 0),
+                _slideDirection == 0 ? 0 : -_slideDirection.toDouble(),
+                0,
+              ),
               end: Offset.zero,
             ).animate(animation);
             return SlideTransition(position: offset, child: child);
@@ -464,10 +552,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         onTap: _goToPreviousDay,
                         behavior: HitTestBehavior.opaque,
                         child: SizedBox(
-                          width: 48, height: 48,
+                          width: 48,
+                          height: 48,
                           child: Center(
-                            child: Icon(Icons.chevron_left, size: 20,
-                                color: onSurface.withValues(alpha: 0.2)),
+                            child: Icon(
+                              Icons.chevron_left,
+                              size: 20,
+                              color: onSurface.withValues(alpha: 0.2),
+                            ),
                           ),
                         ),
                       ),
@@ -486,23 +578,21 @@ class _HomeScreenState extends State<HomeScreen> {
                         onTap: _goToNextDay,
                         behavior: HitTestBehavior.opaque,
                         child: SizedBox(
-                          width: 48, height: 48,
+                          width: 48,
+                          height: 48,
                           child: Center(
-                            child: Icon(Icons.chevron_right, size: 20,
-                                color: onSurface.withValues(alpha: 0.2)),
+                            child: Icon(
+                              Icons.chevron_right,
+                              size: 20,
+                              color: onSurface.withValues(alpha: 0.2),
+                            ),
                           ),
                         ),
                       ),
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  dateStr,
-                  style: TextStyle(
-                    color: subdued,
-                    fontSize: 15,
-                  ),
-                ),
+                Text(dateStr, style: TextStyle(color: subdued, fontSize: 15)),
                 if (!_isToday) ...[
                   const SizedBox(height: 8),
                   GestureDetector(
@@ -523,18 +613,22 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
                 _buildModeRibbon(),
                 const SizedBox(height: 24),
-                _buildLogMomentButton(),
+                _buildActionButtons(),
                 const SizedBox(height: 16),
-                if (_todayEntries.isNotEmpty) ...[
-                  GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => DailyDetailScreen(date: _selectedDate),
+                if (_todayEntries.isNotEmpty || _dayReminders.isNotEmpty) ...[
+                  if (_todayEntries.isNotEmpty)
+                    GestureDetector(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              DailyDetailScreen(date: _selectedDate),
+                        ),
                       ),
-                    ),
-                    child: _buildTodaySummary(),
-                  ),
+                      child: _buildTodaySummary(),
+                    )
+                  else
+                    _buildTodaySummary(),
                   const SizedBox(height: 24),
                 ],
                 _buildReflectionSection(),
@@ -547,6 +641,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildActionButtons() {
+    return Row(
+      children: [
+        Expanded(child: _buildLogMomentButton()),
+        const SizedBox(width: 10),
+        Expanded(child: _buildReminderButton()),
+      ],
+    );
+  }
+
   Widget _buildLogMomentButton() {
     final radii = context.lilaRadii;
     final colorScheme = Theme.of(context).colorScheme;
@@ -554,8 +658,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final theme = _focusTheme(_focusState.season);
     final surfaceColor = colorScheme.surfaceVariant.withValues(alpha: 0.4);
     final borderColor = theme.accent.withValues(alpha: 0.35);
-    final radius =
-        _focusState.season == FocusSeason.builder ? 8.0 : radii.medium;
+    final radius = _focusState.season == FocusSeason.builder
+        ? 8.0
+        : radii.medium;
 
     return Semantics(
       button: true,
@@ -581,7 +686,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisSize: MainAxisSize.max,
               children: [
                 Container(
                   width: 34,
@@ -597,13 +702,85 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  'Log Moment',
-                  style: TextStyle(
-                    color: onSurface.withValues(alpha: 0.85),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.2,
+                Expanded(
+                  child: Text(
+                    'Log Moment',
+                    style: TextStyle(
+                      color: onSurface.withValues(alpha: 0.85),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReminderButton() {
+    final radii = context.lilaRadii;
+    final colorScheme = Theme.of(context).colorScheme;
+    final onSurface = colorScheme.onSurface;
+    final accent = colorScheme.tertiary;
+    final surfaceColor = colorScheme.surfaceVariant.withValues(alpha: 0.4);
+    final borderColor = accent.withValues(alpha: 0.4);
+    final radius = _focusState.season == FocusSeason.builder
+        ? 8.0
+        : radii.medium;
+
+    return Semantics(
+      button: true,
+      label: 'Set Alarm',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: const ValueKey('remind_button'),
+          borderRadius: BorderRadius.circular(radius),
+          onTap: _openReminderSheet,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: surfaceColor,
+              borderRadius: BorderRadius.circular(radius),
+              border: Border.all(color: borderColor),
+              boxShadow: [
+                BoxShadow(
+                  color: context.lilaSurface.shadow,
+                  blurRadius: 10,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.max,
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(radius - 2),
+                  ),
+                  child: Icon(
+                    Icons.notifications_active_outlined,
+                    color: accent.withValues(alpha: 0.95),
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Set Alarm',
+                    style: TextStyle(
+                      color: onSurface.withValues(alpha: 0.85),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.2,
+                    ),
                   ),
                 ),
               ],
@@ -619,8 +796,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final onSurface = colorScheme.onSurface;
     final radii = context.lilaRadii;
     final theme = _focusTheme(_focusState.season);
-    final enabled = _reflectionController.text.trim().isNotEmpty &&
-        !_isLoggingReflection;
+    final enabled =
+        _reflectionController.text.trim().isNotEmpty && !_isLoggingReflection;
 
     return Container(
       key: _reflectionSectionKey,
@@ -667,8 +844,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 backgroundColor: enabled
                     ? colorScheme.surfaceVariant
                     : colorScheme.surfaceVariant.withValues(alpha: 0.4),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(
                     _focusState.season == FocusSeason.builder
@@ -708,8 +887,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final season = _focusState.season;
     final theme = _focusTheme(season);
     final intention = _focusState.intention.trim();
-    final subtitle =
-        intention.isNotEmpty ? '\u201c$intention\u201d' : season.prompt;
+    final subtitle = intention.isNotEmpty
+        ? '\u201c$intention\u201d'
+        : season.prompt;
 
     return GestureDetector(
       onTap: _openFocusFlow,
@@ -760,8 +940,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: TextStyle(
                       color: onSurface.withValues(alpha: 0.5),
                       fontSize: 12,
-                      fontStyle:
-                          intention.isNotEmpty ? FontStyle.italic : null,
+                      fontStyle: intention.isNotEmpty ? FontStyle.italic : null,
                       height: 1.4,
                     ),
                   ),
@@ -785,10 +964,9 @@ class _HomeScreenState extends State<HomeScreen> {
       key: const ValueKey('mode_ribbon'),
       height: 12,
       decoration: BoxDecoration(
-        color: Theme.of(context)
-            .colorScheme
-            .surfaceVariant
-            .withValues(alpha: 0.2),
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceVariant.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(radii.small),
       ),
       child: Row(
@@ -909,11 +1087,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildTodaySummary() {
     final onSurface = Theme.of(context).colorScheme.onSurface;
+    final moments = _todayEntries.length;
+    final reminders = _dayReminders.length;
+    final summaryBits = <String>[];
+    if (moments > 0) {
+      summaryBits.add('$moments moment${moments == 1 ? '' : 's'}');
+    }
+    if (reminders > 0) {
+      summaryBits.add('$reminders reminder${reminders == 1 ? '' : 's'}');
+    }
+    final summaryLabel = summaryBits.join(' • ');
+    final timelineItems = _buildTimelineItems();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '${_todayEntries.length} moment${_todayEntries.length == 1 ? '' : 's'}',
+          summaryLabel,
           style: TextStyle(
             color: onSurface.withValues(alpha: 0.3),
             fontSize: 13,
@@ -921,9 +1110,34 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        ..._todayEntries.reversed.map(_buildSummaryEntry),
+        ...timelineItems.map((item) {
+          return switch (item) {
+            _DayTimelineItemEntry(:final entry) => _buildSummaryEntry(entry),
+            _DayTimelineItemReminder(:final reminder) =>
+              _buildSummaryReminderCard(reminder),
+          };
+        }),
       ],
     );
+  }
+
+  List<_DayTimelineItem> _buildTimelineItems() {
+    final items = <_DayTimelineItem>[
+      ..._todayEntries.map((entry) => _DayTimelineItemEntry(entry)),
+      ..._dayReminders.map((reminder) => _DayTimelineItemReminder(reminder)),
+    ];
+    items.sort((a, b) {
+      final byTime = b.timestamp.compareTo(a.timestamp);
+      if (byTime != 0) return byTime;
+      if (a is _DayTimelineItemReminder && b is _DayTimelineItemEntry) {
+        return -1;
+      }
+      if (a is _DayTimelineItemEntry && b is _DayTimelineItemReminder) {
+        return 1;
+      }
+      return 0;
+    });
+    return items;
   }
 
   Widget _buildSummaryEntry(LogEntry entry) {
@@ -938,7 +1152,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (isReflection) {
       return ArmedSwipeToDelete(
         dismissKey: ValueKey(
-            '${entry.timestamp.toIso8601String()}-${entry.label ?? ''}-${entry.mode.name}-${entry.orientation.name}'),
+          '${entry.timestamp.toIso8601String()}-${entry.label ?? ''}-${entry.mode.name}-${entry.orientation.name}',
+        ),
         onDelete: () async {
           final fs = await FileService.getInstance();
           final removed = await fs.moveEntryToTrash(entry);
@@ -968,7 +1183,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return ArmedSwipeToDelete(
       dismissKey: ValueKey(
-          '${entry.timestamp.toIso8601String()}-${entry.label ?? ''}-${entry.mode.name}-${entry.orientation.name}'),
+        '${entry.timestamp.toIso8601String()}-${entry.label ?? ''}-${entry.mode.name}-${entry.orientation.name}',
+      ),
       onDelete: () async {
         final fs = await FileService.getInstance();
         final removed = await fs.moveEntryToTrash(entry);
@@ -980,7 +1196,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
           await _loadEntries();
-            _refreshAvailableDates();
+          _refreshAvailableDates();
         }
       },
       child: Padding(
@@ -1057,8 +1273,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final reflectionText = _dailyReflection.trim();
     final preview = reflectionText.isNotEmpty
         ? (reflectionText.length > 80
-            ? '${reflectionText.substring(0, 80)}...'
-            : reflectionText)
+              ? '${reflectionText.substring(0, 80)}...'
+              : reflectionText)
         : '';
 
     return Padding(
@@ -1109,11 +1325,124 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildSummaryReminderCard(Reminder reminder) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final radii = context.lilaRadii;
+    final onSurface = colorScheme.onSurface;
+    final reminderColor = colorScheme.tertiary;
+    final now = DateTime.now();
+    final isMissed = !reminder.done && reminder.remindAt.isBefore(now);
+
+    final time = DateFormat('HH:mm').format(reminder.remindAt);
+    final alarmLabel = switch (reminder.alertOffsetMinutes) {
+      0 => 'At time',
+      60 => '1h before',
+      final min => '$min min before',
+    };
+
+    return Padding(
+      key: ValueKey('reminder_card_${reminder.id}'),
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Container(
+        decoration: BoxDecoration(
+          color: reminder.done
+              ? colorScheme.surfaceVariant.withValues(alpha: 0.35)
+              : reminderColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(radii.medium),
+          border: Border.all(
+            color: reminder.done
+                ? colorScheme.outline.withValues(alpha: 0.2)
+                : reminderColor.withValues(alpha: 0.35),
+          ),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(radii.medium),
+          onTap: reminder.done ? null : () => _markReminderDone(reminder),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: reminderColor.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(radii.medium),
+                  ),
+                  child: Icon(
+                    reminder.done ? Icons.check_rounded : Icons.alarm,
+                    size: 18,
+                    color: reminderColor.withValues(alpha: 0.9),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        reminder.text,
+                        style: TextStyle(
+                          color: onSurface.withValues(
+                            alpha: reminder.done ? 0.5 : 0.8,
+                          ),
+                          fontSize: 14,
+                          decoration: reminder.done
+                              ? TextDecoration.lineThrough
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          _buildPill('Reminder', reminderColor),
+                          const SizedBox(width: 6),
+                          _buildPill(
+                            alarmLabel,
+                            reminderColor.withValues(alpha: 0.75),
+                          ),
+                          if (reminder.done) ...[
+                            const SizedBox(width: 6),
+                            _buildPill(
+                              'Done',
+                              onSurface.withValues(alpha: 0.45),
+                            ),
+                          ] else if (isMissed) ...[
+                            const SizedBox(width: 6),
+                            _buildPill(
+                              'Missed',
+                              colorScheme.error.withValues(alpha: 0.75),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  time,
+                  style: TextStyle(
+                    color: onSurface.withValues(alpha: 0.3),
+                    fontSize: 12,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPill(String text, Color color) {
     final radii = context.lilaRadii;
-    final radius =
-        _focusState.season == FocusSeason.builder ? 6.0 : radii.small;
-    final textStyle = Theme.of(context).textTheme.labelSmall ??
+    final radius = _focusState.season == FocusSeason.builder
+        ? 6.0
+        : radii.small;
+    final textStyle =
+        Theme.of(context).textTheme.labelSmall ??
         const TextStyle(fontSize: 11, fontWeight: FontWeight.w500);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1153,4 +1482,26 @@ class _RibbonSegment {
   final int count;
 
   const _RibbonSegment(this.mode, this.count);
+}
+
+sealed class _DayTimelineItem {
+  DateTime get timestamp;
+}
+
+class _DayTimelineItemEntry extends _DayTimelineItem {
+  final LogEntry entry;
+
+  _DayTimelineItemEntry(this.entry);
+
+  @override
+  DateTime get timestamp => entry.timestamp;
+}
+
+class _DayTimelineItemReminder extends _DayTimelineItem {
+  final Reminder reminder;
+
+  _DayTimelineItemReminder(this.reminder);
+
+  @override
+  DateTime get timestamp => reminder.remindAt;
 }
