@@ -180,44 +180,44 @@ class LilaPalette extends ThemeExtension<LilaPalette> {
 
   // Dark palettes
   static const builder = LilaPalette(
-    nourishment: Color(0xFF6B8F71),
-    growth: Color(0xFF7B9EA8),
-    maintenance: Color(0xFFA8976B),
-    drift: Color(0xFF8B7B8B),
-    decay: Color(0xFFCD3B3B),
+    nourishment: Color(0xFF5E9E68),
+    growth: Color(0xFF5B8FAF),
+    maintenance: Color(0xFFC2A84D),
+    drift: Color(0xFF8E72B0),
+    decay: Color(0xFFD04040),
     selfOrientation: Color(0xFF9B8EC4),
     mutualOrientation: Color(0xFF6BA8A0),
     otherOrientation: Color(0xFFA87B6B),
   );
 
   static const sanctuary = LilaPalette(
-    nourishment: Color(0xFF7C9A84),
-    growth: Color(0xFF819B96),
-    maintenance: Color(0xFFB4856F),
-    drift: Color(0xFF9C8A92),
-    decay: Color(0xFFD04545),
+    nourishment: Color(0xFF5E9E68),
+    growth: Color(0xFF5B8FAF),
+    maintenance: Color(0xFFC2A84D),
+    drift: Color(0xFF8E72B0),
+    decay: Color(0xFFD04040),
     selfOrientation: Color(0xFFA59AC9),
     mutualOrientation: Color(0xFF7DA79B),
     otherOrientation: Color(0xFFB07A63),
   );
 
   static const explorer = LilaPalette(
-    nourishment: Color(0xFFE09768),
-    growth: Color(0xFFB18AD9),
-    maintenance: Color(0xFFC38A73),
-    drift: Color(0xFF8E6E99),
-    decay: Color(0xFFD93838),
+    nourishment: Color(0xFF5E9E68),
+    growth: Color(0xFF5B8FAF),
+    maintenance: Color(0xFFC2A84D),
+    drift: Color(0xFF8E72B0),
+    decay: Color(0xFFD04040),
     selfOrientation: Color(0xFFC7A4E6),
     mutualOrientation: Color(0xFFB9948D),
     otherOrientation: Color(0xFFD28B77),
   );
 
   static const anchor = LilaPalette(
-    nourishment: Color(0xFF4A5568),
-    growth: Color(0xFF5A6B78),
-    maintenance: Color(0xFFA0AEC0),
-    drift: Color(0xFF3C4858),
-    decay: Color(0xFFB83A3A),
+    nourishment: Color(0xFF5E9E68),
+    growth: Color(0xFF5B8FAF),
+    maintenance: Color(0xFFC2A84D),
+    drift: Color(0xFF8E72B0),
+    decay: Color(0xFFD04040),
     selfOrientation: Color(0xFF7A8799),
     mutualOrientation: Color(0xFF8793A6),
     otherOrientation: Color(0xFF6E7A8C),
@@ -225,10 +225,10 @@ class LilaPalette extends ThemeExtension<LilaPalette> {
 
   // Light palettes — deeper/more saturated for contrast on light backgrounds
   static const builderLight = LilaPalette(
-    nourishment: Color(0xFF4A7050),
-    growth: Color(0xFF527D88),
-    maintenance: Color(0xFF8A7A4E),
-    drift: Color(0xFF6E5E6E),
+    nourishment: Color(0xFF3D7A47),
+    growth: Color(0xFF3A6E8E),
+    maintenance: Color(0xFF9E8830),
+    drift: Color(0xFF6E5290),
     decay: Color(0xFFAA2E2E),
     selfOrientation: Color(0xFF7B6DAA),
     mutualOrientation: Color(0xFF4A8A82),
@@ -236,33 +236,33 @@ class LilaPalette extends ThemeExtension<LilaPalette> {
   );
 
   static const sanctuaryLight = LilaPalette(
-    nourishment: Color(0xFF5A7D62),
-    growth: Color(0xFF5E7E78),
-    maintenance: Color(0xFF966A52),
-    drift: Color(0xFF7E6B74),
-    decay: Color(0xFFB03232),
+    nourishment: Color(0xFF3D7A47),
+    growth: Color(0xFF3A6E8E),
+    maintenance: Color(0xFF9E8830),
+    drift: Color(0xFF6E5290),
+    decay: Color(0xFFAA2E2E),
     selfOrientation: Color(0xFF877BAF),
     mutualOrientation: Color(0xFF5C8A7E),
     otherOrientation: Color(0xFF925D46),
   );
 
   static const explorerLight = LilaPalette(
-    nourishment: Color(0xFFC27840),
-    growth: Color(0xFF9468BE),
-    maintenance: Color(0xFFA66D56),
-    drift: Color(0xFF6E4E7A),
-    decay: Color(0xFFBA2828),
+    nourishment: Color(0xFF3D7A47),
+    growth: Color(0xFF3A6E8E),
+    maintenance: Color(0xFF9E8830),
+    drift: Color(0xFF6E5290),
+    decay: Color(0xFFAA2E2E),
     selfOrientation: Color(0xFFA882CC),
     mutualOrientation: Color(0xFF9A7670),
     otherOrientation: Color(0xFFB46D5A),
   );
 
   static const anchorLight = LilaPalette(
-    nourishment: Color(0xFF3A4558),
-    growth: Color(0xFF4A5B68),
-    maintenance: Color(0xFF7A8DA0),
-    drift: Color(0xFF2C3848),
-    decay: Color(0xFF982A2A),
+    nourishment: Color(0xFF3D7A47),
+    growth: Color(0xFF3A6E8E),
+    maintenance: Color(0xFF9E8830),
+    drift: Color(0xFF6E5290),
+    decay: Color(0xFFAA2E2E),
     selfOrientation: Color(0xFF5A6779),
     mutualOrientation: Color(0xFF677386),
     otherOrientation: Color(0xFF4E5A6C),
@@ -494,8 +494,6 @@ class LilaTheme {
         lilaSurface: LilaSurface.light,
         pillFontWeight: FontWeight.w500,
         pillLetterSpacing: 0.2,
-        fontFamily: 'Roboto Slab',
-        fontFamilyFallback: const ['Roboto'],
       );
     }
     return _buildTheme(
@@ -514,8 +512,6 @@ class LilaTheme {
       lilaSurface: LilaSurface.dark,
       pillFontWeight: FontWeight.w500,
       pillLetterSpacing: 0.2,
-      fontFamily: 'Roboto Slab',
-      fontFamilyFallback: const ['Roboto'],
     );
   }
 
