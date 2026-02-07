@@ -4,7 +4,8 @@ enum Mode {
   nourishment,
   growth,
   maintenance,
-  drift;
+  drift,
+  decay;
 
   String get label {
     return name[0].toUpperCase() + name.substring(1);
@@ -20,6 +21,8 @@ enum Mode {
         return [DurationPreset.quick, DurationPreset.routine, DurationPreset.heavy];
       case Mode.drift:
         return [DurationPreset.brief, DurationPreset.lost, DurationPreset.spiral];
+      case Mode.decay:
+        return [DurationPreset.pang, DurationPreset.erosion, DurationPreset.flood];
     }
   }
 }
@@ -40,7 +43,11 @@ enum DurationPreset {
   // Drift
   brief,
   lost,
-  spiral;
+  spiral,
+  // Decay
+  pang,
+  erosion,
+  flood;
 
   String get label {
     if (this == DurationPreset.brief) {

@@ -162,6 +162,7 @@ class LilaPalette extends ThemeExtension<LilaPalette> {
   final Color growth;
   final Color maintenance;
   final Color drift;
+  final Color decay;
   final Color selfOrientation;
   final Color mutualOrientation;
   final Color otherOrientation;
@@ -171,6 +172,7 @@ class LilaPalette extends ThemeExtension<LilaPalette> {
     required this.growth,
     required this.maintenance,
     required this.drift,
+    required this.decay,
     required this.selfOrientation,
     required this.mutualOrientation,
     required this.otherOrientation,
@@ -182,6 +184,7 @@ class LilaPalette extends ThemeExtension<LilaPalette> {
     growth: Color(0xFF7B9EA8),
     maintenance: Color(0xFFA8976B),
     drift: Color(0xFF8B7B8B),
+    decay: Color(0xFFCD3B3B),
     selfOrientation: Color(0xFF9B8EC4),
     mutualOrientation: Color(0xFF6BA8A0),
     otherOrientation: Color(0xFFA87B6B),
@@ -192,6 +195,7 @@ class LilaPalette extends ThemeExtension<LilaPalette> {
     growth: Color(0xFF819B96),
     maintenance: Color(0xFFB4856F),
     drift: Color(0xFF9C8A92),
+    decay: Color(0xFFD04545),
     selfOrientation: Color(0xFFA59AC9),
     mutualOrientation: Color(0xFF7DA79B),
     otherOrientation: Color(0xFFB07A63),
@@ -202,6 +206,7 @@ class LilaPalette extends ThemeExtension<LilaPalette> {
     growth: Color(0xFFB18AD9),
     maintenance: Color(0xFFC38A73),
     drift: Color(0xFF8E6E99),
+    decay: Color(0xFFD93838),
     selfOrientation: Color(0xFFC7A4E6),
     mutualOrientation: Color(0xFFB9948D),
     otherOrientation: Color(0xFFD28B77),
@@ -212,6 +217,7 @@ class LilaPalette extends ThemeExtension<LilaPalette> {
     growth: Color(0xFF5A6B78),
     maintenance: Color(0xFFA0AEC0),
     drift: Color(0xFF3C4858),
+    decay: Color(0xFFB83A3A),
     selfOrientation: Color(0xFF7A8799),
     mutualOrientation: Color(0xFF8793A6),
     otherOrientation: Color(0xFF6E7A8C),
@@ -223,6 +229,7 @@ class LilaPalette extends ThemeExtension<LilaPalette> {
     growth: Color(0xFF527D88),
     maintenance: Color(0xFF8A7A4E),
     drift: Color(0xFF6E5E6E),
+    decay: Color(0xFFAA2E2E),
     selfOrientation: Color(0xFF7B6DAA),
     mutualOrientation: Color(0xFF4A8A82),
     otherOrientation: Color(0xFF8A5E4E),
@@ -233,6 +240,7 @@ class LilaPalette extends ThemeExtension<LilaPalette> {
     growth: Color(0xFF5E7E78),
     maintenance: Color(0xFF966A52),
     drift: Color(0xFF7E6B74),
+    decay: Color(0xFFB03232),
     selfOrientation: Color(0xFF877BAF),
     mutualOrientation: Color(0xFF5C8A7E),
     otherOrientation: Color(0xFF925D46),
@@ -243,6 +251,7 @@ class LilaPalette extends ThemeExtension<LilaPalette> {
     growth: Color(0xFF9468BE),
     maintenance: Color(0xFFA66D56),
     drift: Color(0xFF6E4E7A),
+    decay: Color(0xFFBA2828),
     selfOrientation: Color(0xFFA882CC),
     mutualOrientation: Color(0xFF9A7670),
     otherOrientation: Color(0xFFB46D5A),
@@ -253,6 +262,7 @@ class LilaPalette extends ThemeExtension<LilaPalette> {
     growth: Color(0xFF4A5B68),
     maintenance: Color(0xFF7A8DA0),
     drift: Color(0xFF2C3848),
+    decay: Color(0xFF982A2A),
     selfOrientation: Color(0xFF5A6779),
     mutualOrientation: Color(0xFF677386),
     otherOrientation: Color(0xFF4E5A6C),
@@ -268,6 +278,8 @@ class LilaPalette extends ThemeExtension<LilaPalette> {
         return maintenance;
       case Mode.drift:
         return drift;
+      case Mode.decay:
+        return decay;
     }
   }
 
@@ -288,6 +300,7 @@ class LilaPalette extends ThemeExtension<LilaPalette> {
     Color? growth,
     Color? maintenance,
     Color? drift,
+    Color? decay,
     Color? selfOrientation,
     Color? mutualOrientation,
     Color? otherOrientation,
@@ -297,6 +310,7 @@ class LilaPalette extends ThemeExtension<LilaPalette> {
       growth: growth ?? this.growth,
       maintenance: maintenance ?? this.maintenance,
       drift: drift ?? this.drift,
+      decay: decay ?? this.decay,
       selfOrientation: selfOrientation ?? this.selfOrientation,
       mutualOrientation: mutualOrientation ?? this.mutualOrientation,
       otherOrientation: otherOrientation ?? this.otherOrientation,
@@ -311,6 +325,7 @@ class LilaPalette extends ThemeExtension<LilaPalette> {
       growth: Color.lerp(growth, other.growth, t)!,
       maintenance: Color.lerp(maintenance, other.maintenance, t)!,
       drift: Color.lerp(drift, other.drift, t)!,
+      decay: Color.lerp(decay, other.decay, t)!,
       selfOrientation: Color.lerp(selfOrientation, other.selfOrientation, t)!,
       mutualOrientation:
           Color.lerp(mutualOrientation, other.mutualOrientation, t)!,

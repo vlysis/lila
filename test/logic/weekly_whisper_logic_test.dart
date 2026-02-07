@@ -35,6 +35,8 @@ String? generateWeeklyWhisper(
             return 'A week of tending to things.';
           case Mode.drift:
             return 'The week drifted gently.';
+          case Mode.decay:
+            return 'Decay wove through the week.';
         }
       }
     }
@@ -56,10 +58,10 @@ String? generateWeeklyWhisper(
     }
   }
 
-  // All four modes present, none >40%
-  if (modeCounts.length == 4 &&
+  // All modes present, none >40%
+  if (modeCounts.length == Mode.values.length &&
       modeCounts.values.every((c) => c <= total * 0.4)) {
-    return 'All four modes showed up this week.';
+    return 'All modes showed up this week.';
   }
 
   // Dense day contrast
@@ -168,6 +170,17 @@ void main() {
       );
     });
 
+    test('detects decay dominance', () {
+      final entries = [
+        ...List.generate(6, (_) => _e(Mode.decay, LogOrientation.self_)),
+        _e(Mode.growth, LogOrientation.self_),
+      ];
+      expect(
+        generateWeeklyWhisper(entries, {0: entries}),
+        'Decay wove through the week.',
+      );
+    });
+
     test('does not trigger dominance with fewer than 7 entries', () {
       final entries = [
         ...List.generate(4, (_) => _e(Mode.growth, LogOrientation.self_)),
@@ -217,8 +230,8 @@ void main() {
       );
     });
 
-    test('detects all four modes balanced', () {
-      // Need >= 5 entries, all 4 modes present, none > 40%
+    test('detects all modes balanced', () {
+      // Need >= 5 entries, all modes present, none > 40%
       final entries = [
         _e(Mode.nourishment, LogOrientation.self_),
         _e(Mode.nourishment, LogOrientation.other),
@@ -228,10 +241,12 @@ void main() {
         _e(Mode.maintenance, LogOrientation.other),
         _e(Mode.drift, LogOrientation.self_),
         _e(Mode.drift, LogOrientation.mutual),
+        _e(Mode.decay, LogOrientation.self_),
+        _e(Mode.decay, LogOrientation.other),
       ];
       expect(
         generateWeeklyWhisper(entries, {0: entries}),
-        'All four modes showed up this week.',
+        'All modes showed up this week.',
       );
     });
 
@@ -258,7 +273,7 @@ void main() {
     });
 
     test('returns fallback for generic pattern', () {
-      // Enough entries to pass quieter, but no dominance, no 4-mode balance,
+      // Enough entries to pass quieter, but no dominance, not all modes,
       // fewer than 5 active days
       final entries = [
         _e(Mode.growth, LogOrientation.self_, day: 0),
@@ -272,11 +287,11 @@ void main() {
         1: [entries[2], entries[3]],
         2: [entries[4]],
       };
-      // All 4 modes present, but counts: growth=2, nourishment=1, maintenance=1, drift=1
-      // growth is 2/5 = 40% which is <= 40%, so all-four-modes triggers
+      // 4 of 5 modes present (no decay), so all-modes doesn't trigger
+      // 3 active days < 5, so "moments noticed most days" doesn't trigger
       expect(
         generateWeeklyWhisper(entries, byDay),
-        'All four modes showed up this week.',
+        'A week, observed.',
       );
     });
 

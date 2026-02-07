@@ -44,6 +44,13 @@ class WhisperWidget extends StatelessWidget {
       }
     }
 
+    // Decay surfaced
+    if (modeCounts[Mode.decay] != null && modeCounts[Mode.decay]! >= 1) {
+      if (todayEntries.last.mode == Mode.decay) {
+        return 'Decay surfaced.';
+      }
+    }
+
     if (todayEntries.length == 1) {
       return 'Day started.';
     }

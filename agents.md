@@ -75,13 +75,14 @@ lib/
 
 ## Key Concepts
 
-- **Mode:** nourishment, growth, maintenance, drift
+- **Mode:** nourishment, growth, maintenance, drift, decay
 - **Orientation:** self, mutual, other
 - **Duration:** optional, mode-specific presets for capturing "feel" of time
   - Nourishment: moment, stretch, immersive
   - Growth: focused, deep, extended
   - Maintenance: quick, routine, heavy
   - Drift: energizing, short, spiral (stored values remain `brief`, `lost`, `spiral`)
+  - Decay: pang, erosion, flood
 - **LogEntry:** ephemeral — immediately serialized to Markdown, never stored as objects
 - **Reminder:** one-time item with `remind_at`, optional pre-alert offset, and `done` lifecycle state
 - **FileService:** singleton with `@visibleForTesting resetInstance()` for test isolation
@@ -205,7 +206,7 @@ The `daily_reflection_screen.dart` file remains but is no longer the primary UI.
 
 **File structure:** `## Reflection` must always be the last section in daily `.md` files. `appendEntry` inserts new entries before it to preserve this invariant.
 
-**Mode icons:** `assets/icons/` contains `.png` icons for each mode (nourishment, growth, maintenence [sic], drift) and orientation (self, mutual, other), used in the log bottom sheet and daily reflection entry cards.
+**Mode icons:** `assets/icons/` contains `.png` icons for each mode (nourishment, growth, maintenence [sic], drift, decay) and orientation (self, mutual, other), used in the log bottom sheet and daily reflection entry cards.
 
 ## Day Navigation
 

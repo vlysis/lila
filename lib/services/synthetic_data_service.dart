@@ -27,9 +27,10 @@ class SyntheticDataService {
       _e(20, 0, 'Cooking', Mode.nourishment, LogOrientation.self_),
     ]);
 
-    // Wednesday: sparse, drift + maintenance, afternoon
+    // Wednesday: sparse, drift + maintenance + decay, afternoon
     await _writeDay(fs, monday.add(const Duration(days: 2)), [
       _e(14, 0, 'Scrolling', Mode.drift, LogOrientation.self_),
+      _e(15, 30, 'Bad news', Mode.decay, LogOrientation.self_),
       _e(16, 30, 'Tidying desk', Mode.maintenance, LogOrientation.self_),
     ]);
 
@@ -50,9 +51,10 @@ class SyntheticDataService {
       _e(21, 0, 'Music', Mode.nourishment, LogOrientation.self_),
     ]);
 
-    // Saturday: balanced, drift + nourishment
+    // Saturday: balanced, drift + nourishment + decay
     await _writeDay(fs, monday.add(const Duration(days: 5)), [
       _e(10, 0, 'Scrolling', Mode.drift, LogOrientation.self_),
+      _e(12, 0, 'Headache', Mode.decay, LogOrientation.self_),
       _e(14, 0, 'Gardening', Mode.nourishment, LogOrientation.self_),
       _e(18, 0, 'Dinner out', Mode.maintenance, LogOrientation.other),
     ]);

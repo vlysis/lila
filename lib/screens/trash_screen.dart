@@ -25,6 +25,7 @@ class _TrashScreenState extends State<TrashScreen> {
     Mode.growth: 'assets/icons/growth.png',
     Mode.maintenance: 'assets/icons/maintenence.png',
     Mode.drift: 'assets/icons/drift.png',
+    Mode.decay: 'assets/icons/decay.png',
   };
 
   @override

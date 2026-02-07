@@ -34,6 +34,12 @@ String? generateDailyWhisper(List<LogEntry> entries) {
     }
   }
 
+  if (modeCounts[Mode.decay] != null && modeCounts[Mode.decay]! >= 1) {
+    if (entries.last.mode == Mode.decay) {
+      return 'Decay surfaced.';
+    }
+  }
+
   if (entries.length == 1) {
     return 'Day started.';
   }
@@ -127,6 +133,22 @@ void main() {
         _e(Mode.growth, LogOrientation.self_),
       ];
       expect(generateDailyWhisper(entries), isNot('Drift noticed.'));
+    });
+
+    test('detects decay surfaced when last entry is decay', () {
+      final entries = [
+        _e(Mode.growth, LogOrientation.self_),
+        _e(Mode.decay, LogOrientation.self_),
+      ];
+      expect(generateDailyWhisper(entries), 'Decay surfaced.');
+    });
+
+    test('does not trigger decay surfaced when decay is not last', () {
+      final entries = [
+        _e(Mode.decay, LogOrientation.self_),
+        _e(Mode.growth, LogOrientation.self_),
+      ];
+      expect(generateDailyWhisper(entries), isNot('Decay surfaced.'));
     });
 
     test('returns count for multiple entries with no special pattern', () {

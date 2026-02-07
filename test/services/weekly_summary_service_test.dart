@@ -139,6 +139,16 @@ void main() {
       expect(result, contains('The week drifted gently.'));
     });
 
+    test('mode dominance detected for decay', () {
+      final weekStart = DateTime(2026, 1, 27);
+      final all = [
+        ...List.generate(6, (_) => _entry(Mode.decay, LogOrientation.self_)),
+        _entry(Mode.growth, LogOrientation.self_),
+      ];
+      final result = WeeklySummaryService.generate(weekStart, {0: all}, all);
+      expect(result, contains('Decay wove through the week.'));
+    });
+
     test('fallback when no dominance', () {
       final weekStart = DateTime(2026, 1, 27);
       final all = [

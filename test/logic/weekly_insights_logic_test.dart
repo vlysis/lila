@@ -191,6 +191,7 @@ void main() {
       expect(texts, contains("Nourishment didn't appear this week."));
       expect(texts, contains("Maintenance didn't appear this week."));
       expect(texts, contains("Drift didn't appear this week."));
+      expect(texts, contains("Decay didn't appear this week."));
     });
 
     test('does not report present modes as absent', () {
@@ -199,11 +200,13 @@ void main() {
         _e(Mode.nourishment, LogOrientation.self_),
         _e(Mode.maintenance, LogOrientation.other),
         _e(Mode.drift, LogOrientation.mutual),
+        _e(Mode.decay, LogOrientation.self_),
       ];
       final insights = generateInsights(entries, {0: entries});
       final texts = insights.map((i) => i.text).toList();
       expect(texts, isNot(contains("Growth didn't appear this week.")));
       expect(texts, isNot(contains("Nourishment didn't appear this week.")));
+      expect(texts, isNot(contains("Decay didn't appear this week.")));
     });
 
     test('detects mode balance with top two modes', () {
@@ -281,17 +284,22 @@ void main() {
     });
 
     test('detects weekend shift', () {
+      // Use all 5 modes to avoid absent-mode insights eating up the 5-insight cap
       final entries = [
         _e(Mode.growth, LogOrientation.self_, day: 0),
-        _e(Mode.growth, LogOrientation.self_, day: 1),
+        _e(Mode.maintenance, LogOrientation.self_, day: 1),
+        _e(Mode.drift, LogOrientation.self_, day: 2),
+        _e(Mode.decay, LogOrientation.self_, day: 3),
         _e(Mode.nourishment, LogOrientation.other, day: 5),
         _e(Mode.nourishment, LogOrientation.other, day: 6),
       ];
       final byDay = <int, List<LogEntry>>{
         0: [entries[0]],
         1: [entries[1]],
-        5: [entries[2]],
-        6: [entries[3]],
+        2: [entries[2]],
+        3: [entries[3]],
+        5: [entries[4]],
+        6: [entries[5]],
       };
       final insights = generateInsights(entries, byDay);
       final texts = insights.map((i) => i.text).toList();
@@ -300,11 +308,12 @@ void main() {
     });
 
     test('detects orientation arc shift', () {
-      // Use all 4 modes to avoid absent-mode insights eating up the 5-insight cap
+      // Use all 5 modes to avoid absent-mode insights eating up the 5-insight cap
       final entries = [
         _e(Mode.growth, LogOrientation.self_, day: 0),
         _e(Mode.nourishment, LogOrientation.self_, day: 1),
         _e(Mode.maintenance, LogOrientation.self_, day: 2),
+        _e(Mode.decay, LogOrientation.self_, day: 3),
         _e(Mode.drift, LogOrientation.other, day: 4),
         _e(Mode.growth, LogOrientation.other, day: 5),
         _e(Mode.nourishment, LogOrientation.other, day: 6),
@@ -313,9 +322,10 @@ void main() {
         0: [entries[0]],
         1: [entries[1]],
         2: [entries[2]],
-        4: [entries[3]],
-        5: [entries[4]],
-        6: [entries[5]],
+        3: [entries[3]],
+        4: [entries[4]],
+        5: [entries[5]],
+        6: [entries[6]],
       };
       final insights = generateInsights(entries, byDay);
       final texts = insights.map((i) => i.text).toList();
@@ -324,10 +334,12 @@ void main() {
     });
 
     test('detects every day logged', () {
+      // Use all 5 modes to avoid absent-mode insights eating up the 5-insight cap
+      final modes = [Mode.growth, Mode.nourishment, Mode.maintenance, Mode.drift, Mode.decay, Mode.growth, Mode.nourishment];
       final entries = <LogEntry>[];
       final byDay = <int, List<LogEntry>>{};
       for (int i = 0; i < 7; i++) {
-        final e = _e(Mode.growth, LogOrientation.self_, day: i);
+        final e = _e(modes[i], LogOrientation.self_, day: i);
         entries.add(e);
         byDay[i] = [e];
       }
@@ -337,10 +349,10 @@ void main() {
     });
 
     test('detects partial week logging', () {
-      // Use all 4 modes across 5 days to avoid absent-mode insights
+      // Use all 5 modes across 5 days to avoid absent-mode insights
       final entries = <LogEntry>[];
       final byDay = <int, List<LogEntry>>{};
-      final modes = [Mode.growth, Mode.nourishment, Mode.maintenance, Mode.drift, Mode.growth];
+      final modes = [Mode.growth, Mode.nourishment, Mode.maintenance, Mode.drift, Mode.decay];
       for (int i = 0; i < 5; i++) {
         final e = _e(modes[i], LogOrientation.self_, day: i);
         entries.add(e);

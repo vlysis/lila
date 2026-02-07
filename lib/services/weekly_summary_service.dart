@@ -114,6 +114,8 @@ class WeeklySummaryService {
               return 'A week of tending to things.';
             case Mode.drift:
               return 'The week drifted gently.';
+            case Mode.decay:
+              return 'Decay wove through the week.';
           }
         }
       }

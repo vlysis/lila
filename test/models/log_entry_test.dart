@@ -9,6 +9,7 @@ void main() {
       expect(Mode.growth.label, 'Growth');
       expect(Mode.maintenance.label, 'Maintenance');
       expect(Mode.drift.label, 'Drift');
+      expect(Mode.decay.label, 'Decay');
     });
 
     test('durationPresets returns correct presets for each mode', () {
@@ -31,6 +32,11 @@ void main() {
         DurationPreset.brief,
         DurationPreset.lost,
         DurationPreset.spiral,
+      ]);
+      expect(Mode.decay.durationPresets, [
+        DurationPreset.pang,
+        DurationPreset.erosion,
+        DurationPreset.flood,
       ]);
     });
   });

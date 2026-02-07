@@ -47,6 +47,8 @@ class WeeklyWhisperWidget extends StatelessWidget {
               return 'A week of tending to things.';
             case Mode.drift:
               return 'The week drifted gently.';
+            case Mode.decay:
+              return 'Decay wove through the week.';
           }
         }
       }
@@ -68,10 +70,10 @@ class WeeklyWhisperWidget extends StatelessWidget {
       }
     }
 
-    // All four modes present, none >40%
-    if (modeCounts.length == 4 &&
+    // All modes present, none >40%
+    if (modeCounts.length == Mode.values.length &&
         modeCounts.values.every((c) => c <= total * 0.4)) {
-      return 'All four modes showed up this week.';
+      return 'All modes showed up this week.';
     }
 
     // Dense day contrast
