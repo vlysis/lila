@@ -197,7 +197,7 @@ class _ReminderBottomSheetState extends State<ReminderBottomSheet> {
                 controller: _textController,
                 maxLines: 2,
                 decoration: InputDecoration(
-                  hintText: 'Remember to get eggs',
+                  hintText: 'Remember to buy vegetables',
                   filled: true,
                   fillColor: colorScheme.surfaceVariant.withValues(alpha: 0.5),
                   border: OutlineInputBorder(

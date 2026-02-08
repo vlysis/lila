@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/log_entry.dart';
@@ -25,22 +24,10 @@ class _WeeklyReviewScreenState extends State<WeeklyReviewScreen> {
   List<LogEntry> _allEntries = [];
   bool _loading = true;
 
-  final _reflectionController = TextEditingController();
-  Timer? _saveTimer;
-
   @override
   void initState() {
     super.initState();
     _load();
-  }
-
-  @override
-  void dispose() {
-    _saveTimer?.cancel();
-    // Final save on dispose
-    _saveReflectionNow();
-    _reflectionController.dispose();
-    super.dispose();
   }
 
   Future<void> _load() async {
@@ -57,28 +44,13 @@ class _WeeklyReviewScreenState extends State<WeeklyReviewScreen> {
         WeeklySummaryService.generate(widget.weekStart, byDay, all);
     await fs.writeWeeklySummary(widget.weekStart, summary);
 
-    // Load existing reflection
-    final reflection = await fs.readWeeklyReflection(widget.weekStart);
-
     if (mounted) {
       setState(() {
         _entriesByDay = byDay;
         _allEntries = all;
-        _reflectionController.text = reflection;
         _loading = false;
       });
     }
-  }
-
-  void _onReflectionChanged(String text) {
-    _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(seconds: 1), _saveReflectionNow);
-  }
-
-  Future<void> _saveReflectionNow() async {
-    final text = _reflectionController.text;
-    final fs = await FileService.getInstance();
-    await fs.saveWeeklyReflection(widget.weekStart, text);
   }
 
   @override
@@ -110,137 +82,83 @@ class _WeeklyReviewScreenState extends State<WeeklyReviewScreen> {
                 strokeWidth: 2,
               ),
             )
-          : GestureDetector(
-              onTap: () => FocusScope.of(context).unfocus(),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 48),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'This Week',
-                      style: TextStyle(
-                        color: onSurface.withValues(alpha: 0.9),
-                        fontSize: 32,
-                        fontWeight: FontWeight.w300,
-                      ),
+          : SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 48),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'This Week',
+                    style: TextStyle(
+                      color: onSurface.withValues(alpha: 0.9),
+                      fontSize: 32,
+                      fontWeight: FontWeight.w300,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$fromStr – $toStr',
-                      style: TextStyle(
-                        color: onSurface.withValues(alpha: 0.35),
-                        fontSize: 15,
-                      ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$fromStr – $toStr',
+                    style: TextStyle(
+                      color: onSurface.withValues(alpha: 0.35),
+                      fontSize: 15,
                     ),
-                    const SizedBox(height: 16),
-                    if (whisperText != null) ...[
-                      _sectionCard(
-                        WeeklyWhisperWidget(
-                          weekEntries: _allEntries,
-                          entriesByDay: _entriesByDay,
-                          whisperOverride: whisperText,
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 32),
+                  ),
+                  const SizedBox(height: 16),
+                  if (whisperText != null) ...[
                     _sectionCard(
-                      WeekTextureWidget(entriesByDay: _entriesByDay),
+                      WeeklyWhisperWidget(
+                        weekEntries: _allEntries,
+                        entriesByDay: _entriesByDay,
+                        whisperOverride: whisperText,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 32),
+                  _sectionCard(
+                    WeekTextureWidget(entriesByDay: _entriesByDay),
+                  ),
+                  const SizedBox(height: 36),
+                  if (_allEntries.isNotEmpty) ...[
+                    _sectionCard(
+                      OrientationThreadsWidget(weekEntries: _allEntries),
                     ),
                     const SizedBox(height: 36),
-                    if (_allEntries.isNotEmpty) ...[
-                      _sectionCard(
-                        OrientationThreadsWidget(weekEntries: _allEntries),
-                      ),
-                      const SizedBox(height: 36),
-                      _sectionCard(
-                        DailyRhythmWidget(entriesByDay: _entriesByDay),
-                      ),
-                    ] else ...[
-                      _sectionCard(
-                        DailyRhythmWidget(entriesByDay: _entriesByDay),
-                      ),
-                    ],
-                    if (_allEntries.isNotEmpty) ...[
-                      const SizedBox(height: 36),
-                      _sectionCard(
-                        WeeklyInsightsWidget(
-                          weekEntries: _allEntries,
-                          entriesByDay: _entriesByDay,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 36),
-                    _sectionCard(_buildReflectionSection()),
-                    if (_allEntries.isEmpty) ...[
-                      const SizedBox(height: 48),
-                      Center(
-                        child: Text(
-                          'No moments logged this week.',
-                          style: TextStyle(
-                            color: onSurface.withValues(alpha: 0.3),
-                            fontSize: 15,
-                          ),
-                        ),
-                      ),
-                    ],
+                    _sectionCard(
+                      DailyRhythmWidget(entriesByDay: _entriesByDay),
+                    ),
+                  ] else ...[
+                    _sectionCard(
+                      DailyRhythmWidget(entriesByDay: _entriesByDay),
+                    ),
                   ],
-                ),
+                  if (_allEntries.isNotEmpty) ...[
+                    const SizedBox(height: 36),
+                    _sectionCard(
+                      WeeklyInsightsWidget(
+                        weekEntries: _allEntries,
+                        entriesByDay: _entriesByDay,
+                      ),
+                    ),
+                  ],
+                  if (_allEntries.isEmpty) ...[
+                    const SizedBox(height: 48),
+                    Center(
+                      child: Text(
+                        'No moments logged this week.',
+                        style: TextStyle(
+                          color: onSurface.withValues(alpha: 0.3),
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-    );
-  }
-
-  Widget _buildReflectionSection() {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final onSurface = colorScheme.onSurface;
-    final radii = context.lilaRadii;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'REFLECTION',
-          style: TextStyle(
-            color: onSurface.withValues(alpha: 0.25),
-            fontSize: 11,
-            letterSpacing: 1.2,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _reflectionController,
-          onChanged: _onReflectionChanged,
-          maxLines: null,
-          minLines: 4,
-          style: TextStyle(
-            color: onSurface.withValues(alpha: 0.8),
-            fontSize: 15,
-            height: 1.6,
-          ),
-          decoration: InputDecoration(
-            hintText: 'How did this week feel?',
-            hintStyle: TextStyle(
-              color: onSurface.withValues(alpha: 0.3),
-              fontStyle: FontStyle.italic,
-            ),
-            filled: true,
-            fillColor:
-                colorScheme.surfaceVariant.withValues(alpha: 0.6),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(radii.medium),
-              borderSide: BorderSide.none,
-            ),
-            contentPadding: const EdgeInsets.all(16),
-          ),
-        ),
-      ],
     );
   }
 

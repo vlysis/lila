@@ -300,6 +300,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) {
       await _loadEntries();
       _refreshAvailableDates();
+      _reflectionController.clear();
       setState(() => _isLoggingReflection = false);
     }
   }
@@ -1155,6 +1156,10 @@ class _HomeScreenState extends State<HomeScreen> {
         dismissKey: ValueKey(
           '${entry.timestamp.toIso8601String()}-${entry.label ?? ''}-${entry.mode.name}-${entry.orientation.name}',
         ),
+        onEdit: () async {
+          _scrollToReflection();
+          _reflectionFocusNode.requestFocus();
+        },
         onDelete: () async {
           final fs = await FileService.getInstance();
           final removed = await fs.moveEntryToTrash(entry);

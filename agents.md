@@ -1,6 +1,6 @@
 # Lila
 
-A mindful activity logger that captures Mode × Orientation moments as Obsidian-compatible Markdown.
+Lila is a contemplative life-tracking app. You log how you spend your time across five modes (nourishment, growth, maintenance, drift, decay) and three orientations (self, mutual, other), then observe patterns through reflections and visualizations. No scores, no judgment — just awareness. Your data stays local as plain markdown (Obsidian compatible).
 
 ## Build & Run
 
@@ -44,7 +44,7 @@ lib/
   models/log_entry.dart            # Mode, LogOrientation, LogEntry (with MD serialization)
   models/reminder.dart             # Reminder model with Markdown serialization
   services/
-    file_service.dart              # File I/O: create/append/read daily + weekly .md files, daily/weekly reflections, available dates
+    file_service.dart              # File I/O: create/append/read/replace daily + weekly .md files, daily/weekly reflections, available dates
     focus_controller.dart          # Current intention + brightness (light/dark) state
     reminder_service.dart          # Reminder file I/O, done-state updates, and date discovery
     reminder_alarm_scheduler.dart  # Alarm scheduling interface + Android method-channel implementation
@@ -63,7 +63,7 @@ lib/
     weekly_review_screen.dart      # Weekly visualizations and reflections
     settings_screen.dart           # Vault path (changeable), Obsidian info, reset vault, test data
   widgets/
-    log_bottom_sheet.dart          # Log flow: mode grid → orientation → duration presets → optional label; accepts optional date for past-day logging
+    log_bottom_sheet.dart          # Log flow: mode grid → orientation → duration presets → optional label; accepts optional date for past-day logging; edit mode with pre-populated fields
     reminder_bottom_sheet.dart     # Reminder flow: text → day → time → alarm offset; saves one-time reminder
     whisper.dart                   # Reflection text based on today's entries
     weekly_whisper.dart            # Single-line weekly reflection (first-match rule)
@@ -171,6 +171,18 @@ Trash screen (trash icon + label on home AppBar) allows:
 2. Swipe right to restore a trashed moment to its original day.
 3. Empty state copy when no deleted moments exist.
 
+## Editing Moments
+
+Moments can be edited in-place via swipe gesture on the home screen:
+1. **Swipe right** on a moment card to reveal an "Edit" pill (slate-blue, left-aligned).
+2. Tap the Edit pill to open `LogBottomSheet` in edit mode, pre-populated with the entry's mode, orientation, duration, and label.
+3. In edit mode, summary badges (mode, orientation, duration) are **tappable** to revise that field — tapping rewinds the flow to that step.
+4. Save button says "Save" (not "Log"). On save, the sheet pops with the new `LogEntry` (preserving the original timestamp).
+5. The caller uses `FileService.replaceEntry(oldEntry, newEntry)` to swap the entry in-place in the markdown file, preserving entry order.
+6. Reflection entries (`label == 'Daily reflection'`) do **not** have an edit action — they use the dedicated reflection text area.
+
+`ArmedSwipeToDelete` supports an optional `onEdit` callback. When non-null, right-swipe is enabled. When null, only left-swipe (delete) works, same as before.
+
 ## Reminders
 
 Reminders are one-time alarms created from the home screen:
@@ -225,7 +237,7 @@ The home screen supports horizontal swipe navigation between days:
 - Reflection text is saved (debounce flushed) before switching days
 - `AnimatedSwitcher` with `SlideTransition` animates day changes
 - Swipe velocity threshold: 300px/s (avoids conflict with card-level swipe-to-delete)
-- `LogBottomSheet` accepts optional `DateTime? date` param for past-day logging (uses that date with current time-of-day)
+- `LogBottomSheet` accepts optional `DateTime? date` param for past-day logging (uses that date with current time-of-day) and optional `LogEntry? editEntry` for edit mode
 
 ## App Icon
 
